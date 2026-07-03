@@ -1188,68 +1188,13 @@ const COLOR_NAMES = {
 };
 
 const DEFAULT_DATA = {
-  categories: [
-    { id: 'spiritual', name: 'Spiritual', color: 'spiritual', note: 'Get closer to God.', subgroups: [] },
-    { id: 'self',      name: 'Self Development', color: 'self', note: '', subgroups: [] },
-    { id: 'health',    name: 'Health & Fitness', color: 'health', note: '', subgroups: [] },
-    { id: 'family',    name: 'Family & Relationships', color: 'family', note: '', subgroups: [] },
-    { id: 'career',    name: 'Career & Business', color: 'career', note: '', subgroups: [] },
-    { id: 'social',    name: 'Social & Material', color: 'social', note: '', subgroups: [] },
-    { id: 'money',     name: 'Money & Investment', color: 'money', note: '', subgroups: [] },
-  ],
-  goals: [
-    { id: 1, title: 'Start a 90-day devotional journal', category: 'spiritual', deadline: '2026-06-22', points: 10, done: false, notes: 'One sentence per day on what God spoke to you.',
-      actions: [
-        { id: 101, text: 'Buy or set up a journal (physical or notes app)', deadline: '2026-06-17', done: false, points: 2 },
-        { id: 102, text: 'Write entry for day 1', deadline: '2026-06-18', done: false, points: 2 },
-        { id: 103, text: 'Complete first full week (7 entries)', deadline: '2026-06-24', done: false, points: 6 },
-      ] },
-    { id: 2, title: 'Add 3-5 min meditation after morning devotion', category: 'spiritual', deadline: '', points: 10, done: false, notes: '', actions: [] },
-    { id: 3, title: 'Start accessibility roadmap — module 1', category: 'self', deadline: '2026-06-20', points: 20, done: false, notes: 'Pull out the existing roadmap and begin.',
-      actions: [
-        { id: 104, text: 'Find and open the existing roadmap document', deadline: '2026-06-16', done: false, points: 2 },
-        { id: 105, text: 'Complete module 1 readings', deadline: '2026-06-19', done: false, points: 10 },
-        { id: 106, text: 'Take notes on key WCAG concepts learned', deadline: '2026-06-20', done: false, points: 8 },
-      ] },
-    { id: 4, title: 'Choose June general knowledge topic', category: 'self', deadline: '2026-06-18', points: 5, done: false, notes: 'Suggestion: world geography.', actions: [] },
-    { id: 5, title: 'Research violin costs', category: 'self', deadline: '', points: 5, done: false, notes: 'Add to budget conversation with mummy.', actions: [] },
-    { id: 6, title: 'Book doctor consult / start catarrh log', category: 'health', deadline: '2026-06-25', points: 15, done: false, notes: 'Track morning severity + prior day food/activity.',
-      actions: [
-        { id: 107, text: 'Call clinic to check availability', deadline: '2026-06-17', done: false, points: 3 },
-        { id: 108, text: 'Start daily symptom log', deadline: '2026-06-16', done: false, points: 4 },
-        { id: 109, text: 'Attend consultation', deadline: '2026-06-25', done: false, points: 8 },
-      ] },
-    { id: 7, title: 'Choose & start beginner calisthenics program', category: 'health', deadline: '2026-06-20', points: 10, done: false, notes: '',
-      actions: [
-        { id: 110, text: 'Pick a beginner program (YouTube/app)', deadline: '2026-06-17', done: false, points: 3 },
-        { id: 111, text: 'Complete session 1', deadline: '2026-06-18', done: false, points: 7 },
-      ] },
-    { id: 8, title: 'Talk to Samuel about what better relationship means', category: 'family', deadline: '', points: 10, done: false, notes: '', actions: [] },
-    { id: 9, title: 'Pick dish to cook for Samuel — ask mummy for recipe', category: 'family', deadline: '', points: 5, done: false, notes: '', actions: [] },
-    { id: 10,title: 'Define "finished" for RAS — list remaining deliverables', category: 'career', deadline: '2026-06-19', points: 15, done: false, notes: '', actions: [] },
-    { id: 11,title: 'Document DivEx styling concept as Phase 2', category: 'career', deadline: '', points: 15, done: false, notes: "Park it, don't lose it.", actions: [] },
-    { id: 12,title: 'Start Italy/France DivEx travel research doc', category: 'social', deadline: '', points: 10, done: false, notes: '', actions: [] },
-    { id: 13,title: 'Try one new restaurant this month', category: 'social', deadline: '2026-06-30', points: 5, done: false, notes: '', actions: [] },
-    { id: 14,title: 'Watch videos on Nigerian investment platforms', category: 'money', deadline: '2026-06-22', points: 10, done: false, notes: 'Bamboo, Risevest, Cowrywise — research only.', actions: [] },
-    { id: 15,title: 'Document natural-goods supermarket concept', category: 'money', deadline: '', points: 10, done: false, notes: 'Spend 1 hour writing it all down.', actions: [] },
-  ],
-  rewards: [
-    { id: 1, icon: '🎥', name: 'Watch a movie at home', cost: 30 },
-    { id: 2, icon: '🌯', name: 'Shawarma', cost: 50 },
-    { id: 3, icon: '🍕', name: 'Get pizza', cost: 70 },
-    { id: 4, icon: '🎬', name: 'Movie date', cost: 120 },
-    { id: 5, icon: '🛍️', name: 'Order from Temu/Jumia', cost: 250 },
-  ],
+  categories: [],
+  goals: [],
+  rewards: [],
   redeemedLog: [],
   goalHistory: [],
   dailyLog: {},
-  futureGoals: [
-    { id: 1, icon: '🏠', title: 'Build a house with Samuel', note: '4-year horizon — once married and settled.' },
-    { id: 2, icon: '🚗', title: 'First car', note: 'Once income is stable.' },
-    { id: 3, icon: '🐶', title: 'Get a puppy', note: 'Post-Masters, settled home.' },
-    { id: 4, icon: '🌳', title: 'Buy land', note: '2-4 year savings goal.' },
-    { id: 5, icon: '🇮🇹', title: 'Visit Italy & France', note: 'DivEx textile/fashion research trip.' },
-  ],
+  futureGoals: [],
   evidenceJournal: [],
   visionPage: { fulfilled: '', morning: '', proud: '', peace: '', legacy: '' },
   destinyBlueprint: {
@@ -1257,33 +1202,28 @@ const DEFAULT_DATA = {
     statement: '',
     sixMonth: '', oneYear: '', fiveYear: '', tenYear: '',
   },
-  blueprintHistory: [], // snapshots of destinyBlueprint + visionPage at different seasons
-  dailyCheckins: {}, // dateKey -> { morning: '', evening: '' }
-  nextGoalId: 16,
-  nextRewardId: 6,
-  nextActionId: 112,
-  nextFutureId: 6,
+  blueprintHistory: [],
+  dailyCheckins: {},
+  nextGoalId: 1,
+  nextRewardId: 1,
+  nextActionId: 1,
+  nextFutureId: 1,
   nextEvidenceId: 1,
   nextBlueprintSnapshotId: 1,
   githubSync: { token: '', owner: '', repo: '', path: 'life-goals-data.json', lastSync: '' },
-  appVersionSeen: null, // tracks which code version this browser has loaded — set on first load
+  appVersionSeen: null,
   firstInstalledDate: null,
-  locationLog: [], // tracks when an item (by uid) moves between sections, e.g. goals -> history
-  weeklyReviews: [], // saved weekly reflection snapshots
-  decisionLog: [], // logged decisions run through the Decision Compass
+  locationLog: [],
+  weeklyReviews: [],
+  decisionLog: [],
   nextDecisionId: 1,
-  affirmations: [
-    "I am becoming the person God created me to be.",
-    "Every step I take, however small, moves me forward.",
-    "I am capable, creative, and growing every day.",
-    "Faith over fear — always.",
-  ],
-  affirmationLastShown: null, // dateKey of last time affirmation was shown
-  destinyBonusLog: [], // dateKeys that already earned the 100% Destiny Score bonus
+  affirmations: [],
+  affirmationLastShown: null,
+  destinyBonusLog: [],
   bestStreakEver: 0,
   streakRecordLog: [],
   nextSubgroupId: 1,
-  scheduledGoals: [], // goal templates that auto-spawn instances on a schedule
+  scheduledGoals: [],
   nextScheduledId: 1,
 };
 
@@ -1724,6 +1664,16 @@ function renderMain() {
     html = `<div class="empty-state">
       <div class="icon">🌱</div>
       <p>No goals here yet.</p>
+    </div>`;
+  }
+
+  // First-launch: no categories at all → prompt to pull from cloud or go to settings
+  if (state.categories.length === 0) {
+    html = `<div class="empty-state">
+      <div class="icon">✨</div>
+      <p style="font-weight:600;margin-bottom:6px">Welcome to your Life Goals app</p>
+      <p>This is a fresh start. Pull your data from the cloud to restore everything, or go to Settings to set up your categories.</p>
+      <button class="btn btn-primary" style="margin-top:12px" onclick="setTab('settings')">Go to Settings →</button>
     </div>`;
   }
 
