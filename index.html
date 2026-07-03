@@ -226,6 +226,24 @@ body { min-height: 100vh; padding-bottom: 70px; } /* space for bottom nav */
 .formula-stat-bar-bg { height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
 .formula-stat-bar-fill { height: 100%; border-radius: 4px; background: var(--accent); }
 
+/* ── SCHEDULED GOALS ── */
+.scheduled-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px 16px; margin-bottom: 10px; box-shadow: var(--shadow);
+}
+.scheduled-top { display: flex; align-items: flex-start; gap: 10px; }
+.scheduled-icon { font-size: 22px; flex-shrink: 0; }
+.scheduled-body { flex: 1; min-width: 0; }
+.scheduled-title { font-size: 14.5px; font-weight: 500; color: var(--ink); }
+.scheduled-meta { font-size: 12px; color: var(--ink3); margin-top: 3px; line-height: 1.6; }
+.scheduled-next { font-size: 12px; font-weight: 600; margin-top: 4px; }
+.scheduled-next.soon { color: var(--c-health); }
+.scheduled-next.due { color: var(--done); }
+.scheduled-next.overdue { color: var(--danger); }
+.scheduled-instances { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--surface2); }
+.scheduled-instance-row { font-size: 12px; color: var(--ink3); padding: 2px 0; display: flex; justify-content: space-between; }
+.scheduled-instance-row.active { color: var(--ink); font-weight: 500; }
+
 /* ── LEGACY DASHBOARD ── */
 .legacy-hero { background: linear-gradient(135deg, var(--c-spiritual-l), var(--accent-l)); border-radius: var(--radius); padding: 26px 20px; text-align: center; margin-bottom: 18px; }
 .legacy-hero-title { font-family: var(--serif); font-size: 20px; font-weight: 600; margin-bottom: 6px; }
@@ -378,10 +396,11 @@ body { min-height: 100vh; padding-bottom: 70px; } /* space for bottom nav */
 
 .heatmap-panel {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 18px; box-shadow: var(--shadow); margin-bottom: 18px; overflow-x: auto;
+  padding: 18px; box-shadow: var(--shadow); margin-bottom: 18px;
 }
 .heatmap-title { font-family: var(--serif); font-size: 16px; font-weight: 600; margin-bottom: 4px; }
 .heatmap-sub { font-size: 12px; color: var(--ink3); margin-bottom: 14px; }
+.heatmap-scroll-wrap { overflow-x: auto; }
 .heatmap-grid { display: flex; gap: 3px; min-width: max-content; }
 .heatmap-week { display: flex; flex-direction: column; gap: 3px; }
 .heatmap-day-wrap { position: relative; }
@@ -405,6 +424,20 @@ body { min-height: 100vh; padding-bottom: 70px; } /* space for bottom nav */
 .heatmap-legend .heatmap-day { cursor: default; }
 .heatmap-legend .heatmap-day:hover { transform: none; }
 .heatmap-months { display: flex; gap: 3px; margin-bottom: 4px; font-size: 10px; color: var(--ink3); min-width: max-content; }
+
+.month-scroll-wrap { overflow-x: auto; margin-bottom: 14px; }
+.month-pill-row { display: flex; gap: 6px; min-width: max-content; padding-bottom: 2px; }
+.month-pill {
+  padding: 6px 14px; border-radius: 16px; font-size: 12.5px; font-weight: 500;
+  background: var(--surface2); color: var(--ink3); cursor: pointer; white-space: nowrap;
+  flex-shrink: 0; transition: all .15s;
+}
+.month-pill:hover { color: var(--ink2); }
+.month-pill.active { background: var(--accent); color: white; }
+.month-year-select {
+  font-size: 13px; font-weight: 600; color: var(--ink2); background: var(--surface2);
+  border: 1px solid var(--border); border-radius: 8px; padding: 5px 10px; cursor: pointer;
+}
 
 .streak-panel {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
@@ -984,6 +1017,74 @@ body { min-height: 100vh; padding-bottom: 70px; } /* space for bottom nav */
   </div>
 </div>
 
+<!-- SCHEDULED GOAL MODAL -->
+<div class="modal-overlay" id="scheduledModalOverlay">
+  <div class="modal">
+    <div class="modal-title" id="scheduledModalTitle">New Scheduled Goal</div>
+    <div class="field-label">Goal title</div>
+    <input class="field-input" id="sc-title" placeholder="e.g. Update portfolio, Pedicure">
+    <div class="field-label">Category</div>
+    <select class="field-select" id="sc-category"></select>
+    <div class="field-label">Repeat every</div>
+    <div class="field-row">
+      <div>
+        <input class="field-input" id="sc-interval" type="number" min="1" value="30" style="width:80px">
+      </div>
+      <div>
+        <select class="field-select" id="sc-unit">
+          <option value="days">Days</option>
+          <option value="weeks">Weeks</option>
+          <option value="months">Months</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-label">First due date</div>
+    <input class="field-input" id="sc-first" type="date">
+    <div class="field-label">Points per instance</div>
+    <input class="field-input" id="sc-points" type="number" min="0" value="5">
+    <div class="field-label">Notes (optional)</div>
+    <input class="field-input" id="sc-notes" placeholder="Brief reminder of what this involves">
+
+    <div class="field-label">Actions (optional — added to every instance)</div>
+    <div id="sc-actions-list" style="margin-bottom:8px"></div>
+    <div class="quick-add-action">
+      <input class="quick-add-input" id="sc-action-input" placeholder="Add an action..." onkeydown="if(event.key==='Enter'){event.preventDefault();addScheduledAction();}">
+      <div class="quick-add-row2">
+        <input class="quick-add-date quick-add-pts" id="sc-action-pts" type="number" placeholder="pts" min="0" value="5">
+        <button class="quick-add-save" onclick="addScheduledAction()" title="Add">+</button>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('scheduledModalOverlay')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveScheduledGoal()">Save Schedule</button>
+    </div>
+  </div>
+</div>
+
+<!-- ACTION EDIT MODAL -->
+<div class="modal-overlay" id="actionEditModalOverlay">
+  <div class="modal">
+    <div class="modal-title">Edit Action</div>
+    <div class="field-label">Action text</div>
+    <input class="field-input" id="ae-text" placeholder="What needs to be done?">
+    <div class="field-row">
+      <div>
+        <div class="field-label">Deadline (optional)</div>
+        <input class="field-input" id="ae-deadline" type="date">
+      </div>
+      <div>
+        <div class="field-label">Points</div>
+        <input class="field-input" id="ae-points" type="number" min="0" value="5">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('actionEditModalOverlay')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveActionEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- RECURRING ACTION MODAL -->
 <div class="modal-overlay" id="recurModalOverlay">
   <div class="modal">
@@ -1179,7 +1280,11 @@ const DEFAULT_DATA = {
   ],
   affirmationLastShown: null, // dateKey of last time affirmation was shown
   destinyBonusLog: [], // dateKeys that already earned the 100% Destiny Score bonus
+  bestStreakEver: 0,
+  streakRecordLog: [],
   nextSubgroupId: 1,
+  scheduledGoals: [], // goal templates that auto-spawn instances on a schedule
+  nextScheduledId: 1,
 };
 
 let state = loadState();
@@ -1249,6 +1354,10 @@ function backfillUIDs(s) {
   // Backfill subgroups array on categories that pre-date this feature
   (s.categories||[]).forEach(c => { if (!c.subgroups) c.subgroups = []; });
   if (!s.nextSubgroupId) s.nextSubgroupId = 1;
+  if (!s.scheduledGoals) s.scheduledGoals = [];
+  if (!s.nextScheduledId) s.nextScheduledId = 1;
+  if (s.bestStreakEver === undefined) s.bestStreakEver = 0;
+  if (!s.streakRecordLog) s.streakRecordLog = [];
 }
 
 function saveState() {
@@ -1330,6 +1439,7 @@ const BOTTOM_NAV = ['home','goals','today','grow'];
 
 // "More" menu items — everything that doesn't fit a primary tab
 const MORE_ITEMS = [
+  { id: 'scheduled', label: '📅 Scheduled Goals' },
   { id: 'daily',    label: '📝 Daily' },
   { id: 'weekly',   label: '📆 Weekly Review' },
   { id: 'overdue',  label: '⚠️ Overdue' },
@@ -1444,7 +1554,7 @@ function renderStats() {
   const html = `
     <div class="stat-chip"><b>${done}</b>/${total} goals done</div>
     <div class="stat-chip reward">⚡ <b>${balance()}</b> pts available</div>
-    ${overdue > 0 ? `<div class="stat-chip" style="background:var(--danger-l);color:var(--danger)"><b>${overdue}</b> overdue</div>` : ''}
+    ${overdue > 0 ? `<div class="stat-chip" style="background:var(--danger-l);color:var(--danger);cursor:pointer" onclick="setTab('overdue')"><b>${overdue}</b> overdue ›</div>` : ''}
   `;
   document.getElementById('statsStrip').innerHTML = html;
 }
@@ -1456,11 +1566,25 @@ function renderMain() {
   renderStats();
   const main = document.getElementById('mainContent');
 
-  if (currentTab === 'dashboard' || currentTab === 'home') { main.innerHTML = renderDashboardPage(); return; }
+  if (currentTab === 'dashboard' || currentTab === 'home') {
+    main.innerHTML = renderDashboardPage();
+    // Heatmap now builds with the current week/month leftmost, so it's visible
+    // by default with no scroll needed — scrolling right reveals past months.
+    // Month pills (Jan-Dec calendar order) scroll to the active month so it's visible.
+    setTimeout(() => {
+      const monthScroll = document.getElementById('monthScrollWrap');
+      if (monthScroll) {
+        const activePill = monthScroll.querySelector('.month-pill.active');
+        if (activePill && activePill.scrollIntoView) activePill.scrollIntoView({ behavior: 'instant', inline: 'center', block: 'nearest' });
+      }
+    }, 0);
+    return;
+  }
   if (currentTab === 'today')     { main.innerHTML = renderTodayPage(); return; }
   if (currentTab === 'overdue')   { main.innerHTML = renderOverduePage(); return; }
   if (currentTab === 'history')   { main.innerHTML = renderHistoryPage(); return; }
   if (currentTab === 'rewards')   { main.innerHTML = renderRewardsPage(); return; }
+  if (currentTab === 'scheduled') { main.innerHTML = renderScheduledPage(); return; }
   if (currentTab === 'daily')     { main.innerHTML = renderDailyPage(); return; } // merged journal+checkin
   if (currentTab === 'journal')   { main.innerHTML = renderDailyPage(); return; } // legacy route
   if (currentTab === 'checkin')   { main.innerHTML = renderDailyPage(); return; } // legacy route
@@ -1666,6 +1790,7 @@ function goalCardHTML(g, cat) {
           ${aDeadlineHTML}
         </div>
         <div class="action-item-actions">
+          <button onclick="openActionEdit(${g.id},${a.id})" title="Edit">✎</button>
           <button class="del-btn" onclick="deleteAction(${g.id},${a.id})" title="Delete">✕</button>
         </div>
       </div>`;
@@ -1896,6 +2021,35 @@ function showTodayBreakdown() {
   document.getElementById('completionOverlay').classList.add('show');
 }
 
+let _editingActionGoalId = null;
+let _editingActionId = null;
+
+function openActionEdit(goalId, actionId) {
+  const g = state.goals.find(x => x.id === goalId);
+  const a = g.actions.find(x => x.id === actionId);
+  _editingActionGoalId = goalId;
+  _editingActionId = actionId;
+  document.getElementById('ae-text').value = a.text;
+  document.getElementById('ae-deadline').value = a.deadline || '';
+  document.getElementById('ae-points').value = a.points || 0;
+  document.getElementById('actionEditModalOverlay').classList.add('show');
+  setTimeout(() => document.getElementById('ae-text').focus(), 100);
+}
+
+function saveActionEdit() {
+  const text = document.getElementById('ae-text').value.trim();
+  if (!text) { showToast('Please enter action text'); return; }
+  const g = state.goals.find(x => x.id === _editingActionGoalId);
+  const a = g.actions.find(x => x.id === _editingActionId);
+  a.text = text;
+  a.deadline = document.getElementById('ae-deadline').value;
+  a.points = parseInt(document.getElementById('ae-points').value) || 0;
+  saveState();
+  closeModal('actionEditModalOverlay');
+  renderMain();
+  showToast('Action updated');
+}
+
 function deleteAction(goalId, actionId) {
   const g = state.goals.find(x => x.id === goalId);
   g.actions = g.actions.filter(a => a.id !== actionId);
@@ -2085,6 +2239,9 @@ function renderDashboardPage() {
     prevDate = d;
   });
 
+  // Award +10pts the first time the current streak exceeds the previous best, once per new record
+  maybeAwardStreakRecord(currentStreak);
+
   // ── ACTIVITY FIRST: today's summary + heatmap ──
   const todayCount = state.dailyLog[todayKey()] || 0;
   let html = `<div class="dash-stat-card" style="text-align:left;display:flex;align-items:center;gap:12px;margin-bottom:14px;cursor:pointer" onclick="showTodayBreakdown()">
@@ -2112,34 +2269,134 @@ function renderDashboardPage() {
 
   html += renderDestinyScore();
 
-  // Category progress
-  html += `<div class="cat-progress-panel">`;
-  html += `<div class="heatmap-title" style="margin-bottom:12px">Progress by Category</div>`;
-  state.categories.forEach(cat => {
-    const active = state.goals.filter(g => g.category === cat.id);
-    const historical = state.goalHistory.filter(g => g.category === cat.id);
-    const total = active.length + historical.length;
-    const done = historical.length;
-    const pct = total ? Math.round((done/total)*100) : 0;
-    html += `<div class="cat-progress-row">
-      <div class="cat-progress-label"><span>${escapeHtml(cat.name)}</span><span style="color:var(--ink3)">${done}/${total}</span></div>
-      <div class="cat-progress-bg"><div class="cat-progress-fill" style="width:${pct}%;background:var(--c-${cat.color})"></div></div>
+  // ── Category progress: MONTHLY, with month pills + year dropdown for scalability ──
+  const now = new Date();
+  if (!dashboardYear) dashboardYear = now.getFullYear();
+  if (dashboardMonth === null || dashboardMonth === undefined) dashboardMonth = now.getMonth();
+
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const monthShort = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  // Year dropdown: from the year the app was first installed (or 2024 fallback) through current year + 0
+  const installYear = state.firstInstalledDate ? new Date(state.firstInstalledDate).getFullYear() : now.getFullYear();
+  const earliestYear = Math.min(installYear, now.getFullYear());
+  const yearOptions = [];
+  for (let y = now.getFullYear(); y >= earliestYear; y--) yearOptions.push(y);
+
+  const isCurrentMonth = dashboardYear === now.getFullYear() && dashboardMonth === now.getMonth();
+
+  html += `<div class="cat-progress-panel">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
+      <div class="heatmap-title" style="margin-bottom:0">Progress by Category</div>
+      <select class="month-year-select" id="dashYearSelect" onchange="setDashboardYear(this.value)">
+        ${yearOptions.map(y => `<option value="${y}" ${y===dashboardYear?'selected':''}>${y}</option>`).join('')}
+      </select>
+    </div>
+    <div class="heatmap-sub" style="margin-bottom:10px">${isCurrentMonth ? 'This month — ' : ''}${monthNames[dashboardMonth]} ${dashboardYear}</div>
+    <div class="month-scroll-wrap" id="monthScrollWrap">
+      <div class="month-pill-row">
+        ${monthShort.map((m, i) => `<div class="month-pill ${i===dashboardMonth?'active':''}" onclick="setDashboardMonth(${i})">${m}</div>`).join('')}
+      </div>
     </div>`;
+
+  // Filter goalHistory completions to the selected month/year
+  const monthStart = dateKey(new Date(dashboardYear, dashboardMonth, 1));
+  const lastDay = new Date(dashboardYear, dashboardMonth + 1, 0).getDate();
+  const monthEnd = dateKey(new Date(dashboardYear, dashboardMonth, lastDay));
+
+  state.categories.forEach(cat => {
+    // Goals ALLOCATED to this month: goals whose startDate OR deadline falls in this month/year.
+    // If nothing is set for a category this month, it shows 0/0.
+    const goalsForMonth = state.goals.filter(g =>
+      g.category === cat.id &&
+      ((g.startDate && g.startDate >= monthStart && g.startDate <= monthEnd) ||
+       (g.deadline && g.deadline >= monthStart && g.deadline <= monthEnd))
+    );
+    const completedThisMonth = state.goalHistory.filter(g =>
+      g.category === cat.id && g.completedDate >= monthStart && g.completedDate <= monthEnd
+    );
+    const total = goalsForMonth.length + completedThisMonth.length;
+    const done = completedThisMonth.length;
+    const pct = total ? Math.round((done/total)*100) : 0;
+
+    if (total === 0) {
+      // Nothing allocated this month for this category — show greyed out
+      html += `<div class="cat-progress-row" style="opacity:0.4">
+        <div class="cat-progress-label"><span>${escapeHtml(cat.name)}</span><span style="color:var(--ink3)">—</span></div>
+        <div class="cat-progress-bg"><div class="cat-progress-fill" style="width:0%;background:var(--c-${cat.color})"></div></div>
+      </div>`;
+    } else {
+      html += `<div class="cat-progress-row">
+        <div class="cat-progress-label"><span>${escapeHtml(cat.name)}</span><span style="color:var(--ink3)">${done}/${total}</span></div>
+        <div class="cat-progress-bg"><div class="cat-progress-fill" style="width:${pct}%;background:var(--c-${cat.color})"></div></div>
+      </div>`;
+    }
   });
   html += `</div>`;
 
   return html;
 }
 
+function setDashboardYear(year) {
+  dashboardYear = parseInt(year);
+  renderMain();
+}
+
+function setDashboardMonth(monthIdx) {
+  dashboardMonth = monthIdx;
+  renderMain();
+  setTimeout(() => {
+    const monthScroll = document.getElementById('monthScrollWrap');
+    if (monthScroll) {
+      const activePill = monthScroll.querySelector('.month-pill.active');
+      if (activePill && activePill.scrollIntoView) activePill.scrollIntoView({ behavior: 'instant', inline: 'center', block: 'nearest' });
+    }
+  }, 0);
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // DESTINY SCORE — measures alignment, not just task completion
 // ═══════════════════════════════════════════════════════════════════
+// Computes the % of today's relevant goals/actions that are actually done.
+// "Relevant to today" reuses the same logic as the Today page: isToday flag,
+// deadline === today, or a spanning goal whose window includes today.
+function computeTodayCompletionPct() {
+  const today = todayKey();
+  let totalItems = 0, doneItems = 0;
+
+  state.goals.forEach(g => {
+    if (g.done) return; // already fully completed goals don't count against today
+    const relevantToday = isForToday(g);
+    const todayActions = (g.actions||[]).filter(a => {
+      if (a.recurring && a.occurrences) return a.occurrences.some(o => o.date === today);
+      return a.deadline === today;
+    });
+
+    if (todayActions.length) {
+      todayActions.forEach(a => {
+        if (a.recurring && a.occurrences) {
+          const occ = a.occurrences.find(o => o.date === today);
+          totalItems++; if (occ && occ.done) doneItems++;
+        } else {
+          totalItems++; if (a.done) doneItems++;
+        }
+      });
+    } else if (relevantToday) {
+      totalItems++; if (g.done) doneItems++;
+    }
+  });
+
+  if (totalItems === 0) return 100; // nothing scheduled today = nothing to fall short on
+  return Math.round((doneItems / totalItems) * 100);
+}
+
 function computeDestinyScore() {
   const today = todayKey();
   let signals = [];
 
-  // 1. Did I work on something today? (any activity logged)
-  signals.push({ label: 'Worked on at least one goal today', met: (state.dailyLog[today]||0) > 0 });
+  // 1. Did I complete at least 80% of today's scheduled goals/actions?
+  const todayPct = computeTodayCompletionPct();
+  signals.push({ label: 'Completed at least 80% of today\'s goals', met: todayPct >= 80 });
 
   // 2. Did I do a daily check-in today?
   const checkin = state.dailyCheckins[today];
@@ -2206,8 +2463,38 @@ function maybeAwardDestinyBonus() {
   showToast('🎉 100% Destiny Score — +10pts bonus!');
 }
 
+// Awards +10pts the moment your CURRENT streak exceeds your previous all-time best.
+// Tracked via state.bestStreakEver + state.streakRecordLog so it only fires once
+// per new record (not every render while you stay at the new best).
+function maybeAwardStreakRecord(currentStreak) {
+  if (!state.bestStreakEver) state.bestStreakEver = 0;
+  if (!state.streakRecordLog) state.streakRecordLog = [];
+  const today = todayKey();
+
+  if (currentStreak > state.bestStreakEver && !state.streakRecordLog.includes(today)) {
+    const oldBest = state.bestStreakEver;
+    state.bestStreakEver = currentStreak;
+    state.streakRecordLog.push(today);
+    state.goalHistory.push({
+      id: state.nextGoalId++, uid: newUID(),
+      title: `🔥 New longest streak — ${currentStreak} days!`,
+      category: state.categories[0].id,
+      deadline: today, completedDate: today,
+      points: 10, done: true, actions: [], isStreakBonus: true
+    });
+    saveState();
+    if (oldBest > 0) showToast(`🔥 New record! ${currentStreak}-day streak — +10pts bonus!`);
+  } else if (currentStreak > state.bestStreakEver) {
+    // Safety net: streak grew but for some reason today wasn't logged as awarded yet
+    state.bestStreakEver = currentStreak;
+    saveState();
+  }
+}
+
 function renderHeatmap() {
-  // Build last 26 weeks (≈6 months) ending today, GitHub style, Sun-Sat columns
+  // Build last 26 weeks (≈6 months) ending today, GitHub style, Sun-Sat columns.
+  // Ordered NEWEST FIRST (current week leftmost) so the current month is visible
+  // by default with no scrolling — scrolling right reveals past months.
   const today = new Date(new Date().toDateString());
   const weeksToShow = 26;
   const totalDays = weeksToShow * 7;
@@ -2244,8 +2531,9 @@ function renderHeatmap() {
     }
     weeks.push(days);
   }
+  weeks = weeks; // oldest left, newest right — auto-scroll brings current month into view
 
-  // Month labels above columns where month changes
+  // Month labels: check FIRST day of each week for month change
   let monthLabels = [];
   let lastMonth = null;
   weeks.forEach(week => {
@@ -2273,8 +2561,10 @@ function renderHeatmap() {
   return `<div class="heatmap-panel">
     <div class="heatmap-title">Activity</div>
     <div class="heatmap-sub">Each box is a day. Darker = more actions completed that day.</div>
-    ${monthsHTML}
-    ${gridHTML}
+    <div class="heatmap-scroll-wrap" id="heatmapScrollWrap">
+      ${monthsHTML}
+      ${gridHTML}
+    </div>
     <div class="heatmap-legend">
       Less
       <div class="heatmap-day"></div>
@@ -2291,6 +2581,8 @@ function renderHeatmap() {
 // HISTORY PAGE
 // ═══════════════════════════════════════════════════════════════════
 let historyFilter = 'all';
+let dashboardYear = null; // null = current year, set on first render
+let dashboardMonth = null; // null = current month, set on first render
 function renderHistoryPage() {
   let html = `<div class="cat-pills-row" style="display:flex;margin:0 -14px 14px;padding:0 14px 10px;border-bottom:1px solid var(--border)">
     <div class="cat-pill ${historyFilter==='all'?'active':''}" onclick="setHistoryFilter('all')">All</div>
@@ -2495,6 +2787,21 @@ function isForToday(g) {
   const today = todayKey();
   if (g.isToday) return true;
   if (g.deadline && g.deadline === today) return true;
+  // Spanning goal: has a startDate on or before today AND deadline on or after today
+  if (g.startDate && g.deadline && g.startDate <= today && g.deadline >= today) return true;
+  // Goal with startDate today (no deadline set yet)
+  if (g.startDate && g.startDate === today) return true;
+  return false;
+}
+
+function isGoalInRange(g, rangeStart, rangeEnd) {
+  // Appears in range if:
+  // 1. Deadline falls within range
+  if (g.deadline && g.deadline >= rangeStart && g.deadline <= rangeEnd) return true;
+  // 2. Spanning goal: startDate ≤ rangeEnd AND deadline ≥ rangeStart (overlaps the window)
+  if (g.startDate && g.deadline && g.startDate <= rangeEnd && g.deadline >= rangeStart) return true;
+  // 3. isToday flag when range includes today
+  if (g.isToday && rangeStart <= todayKey() && rangeEnd >= todayKey()) return true;
   return false;
 }
 
@@ -2544,7 +2851,9 @@ function renderTodayPage() {
 
   state.goals.forEach(g => {
     if (g.done) return;
-    const goalInRange = (taskHorizon === 'today' && isForToday(g)) || (g.deadline && inRange(g.deadline));
+    const goalInRange = taskHorizon === 'today'
+      ? isForToday(g)
+      : isGoalInRange(g, rangeStart, rangeEnd);
 
     const matchingActions = (g.actions||[]).filter(a => {
       if (a.recurring && a.occurrences) return a.occurrences.some(o => inRange(o.date) && !o.done);
@@ -2625,6 +2934,310 @@ function renderTodayPage() {
 // ═══════════════════════════════════════════════════════════════════
 // OVERDUE PAGE — separate from Today as requested
 // ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+// SCHEDULED GOALS — goal templates that auto-spawn instances on a
+// repeating schedule. Instances only appear in Goals list when due.
+// ═══════════════════════════════════════════════════════════════════
+
+function intervalToDays(interval, unit) {
+  if (unit === 'days') return interval;
+  if (unit === 'weeks') return interval * 7;
+  if (unit === 'months') return interval * 30;
+  return interval;
+}
+
+function nextDueDate(sc) {
+  // Find the next date after today that this schedule fires
+  const today = todayKey();
+  let cursor = new Date(sc.firstDue);
+  const stepDays = intervalToDays(sc.interval, sc.unit);
+  // Fast-forward to the next occurrence on or after today
+  while (dateKey(cursor) < today) {
+    cursor.setDate(cursor.getDate() + stepDays);
+  }
+  return dateKey(cursor);
+}
+
+function upcomingDates(sc, count = 5) {
+  const dates = [];
+  let cursor = new Date(sc.firstDue);
+  const stepDays = intervalToDays(sc.interval, sc.unit);
+  const today = todayKey();
+  let safeguard = 0;
+  while (dates.length < count && safeguard++ < 500) {
+    const d = dateKey(cursor);
+    if (d >= today) dates.push(d);
+    cursor.setDate(cursor.getDate() + stepDays);
+  }
+  return dates;
+}
+
+function spawnScheduledInstances() {
+  // Called on app load. For each scheduled goal, create a real goal
+  // in state.goals if the next due date has arrived and no live
+  // instance already exists for that occurrence.
+  if (!state.scheduledGoals) return;
+  const today = todayKey();
+  let spawned = 0;
+  state.scheduledGoals.forEach(sc => {
+    if (!sc.active) return;
+    // Find all due dates up to and including today
+    const stepDays = intervalToDays(sc.interval, sc.unit);
+    let cursor = new Date(sc.firstDue);
+    const safeguard = 500;
+    let count = 0;
+    while (dateKey(cursor) <= today && count++ < safeguard) {
+      const dueDate = dateKey(cursor);
+      // Check if an instance for this exact dueDate already exists
+      const alreadySpawned = state.goals.find(g =>
+        g.scheduledId === sc.id && g.scheduledDue === dueDate
+      ) || state.goalHistory.find(g =>
+        g.scheduledId === sc.id && g.scheduledDue === dueDate
+      );
+      if (!alreadySpawned) {
+        const cat = state.categories.find(c => c.id === sc.category) || state.categories[0];
+        // Clone the template's actions fresh for this instance — each occurrence
+        // gets its own independent action set with new ids/uids, all undone.
+        const instanceActions = (sc.actions || []).map(a => ({
+          id: state.nextActionId++,
+          uid: newUID(),
+          text: a.text,
+          points: a.points || 0,
+          done: false,
+        }));
+        state.goals.push({
+          id: state.nextGoalId++,
+          uid: newUID(),
+          title: sc.title,
+          category: sc.category || cat.id,
+          subgroup: sc.subgroup || undefined,
+          notes: sc.notes || '',
+          startDate: dueDate,
+          deadline: dueDate,
+          points: sc.points || 5,
+          done: false,
+          actions: instanceActions,
+          isToday: false,
+          scheduledId: sc.id,        // link back to the template
+          scheduledDue: dueDate,     // which occurrence this is
+        });
+        spawned++;
+      }
+      cursor.setDate(cursor.getDate() + stepDays);
+    }
+  });
+  if (spawned > 0) saveState();
+}
+
+let editingScheduledId = null;
+let scActionsBuilder = []; // temp list of {text, points} while the modal is open
+
+function openScheduledModal(id = null) {
+  editingScheduledId = id;
+  const sel = document.getElementById('sc-category');
+  sel.innerHTML = state.categories.map(c =>
+    `<option value="${c.id}">${escapeHtml(c.name)}</option>`
+  ).join('');
+
+  if (id) {
+    const sc = state.scheduledGoals.find(x => x.id === id);
+    document.getElementById('scheduledModalTitle').textContent = 'Edit Schedule';
+    document.getElementById('sc-title').value = sc.title;
+    document.getElementById('sc-category').value = sc.category;
+    document.getElementById('sc-interval').value = sc.interval;
+    document.getElementById('sc-unit').value = sc.unit;
+    document.getElementById('sc-first').value = sc.firstDue;
+    document.getElementById('sc-points').value = sc.points;
+    document.getElementById('sc-notes').value = sc.notes || '';
+    scActionsBuilder = (sc.actions || []).map(a => ({ text: a.text, points: a.points }));
+  } else {
+    document.getElementById('scheduledModalTitle').textContent = 'New Scheduled Goal';
+    document.getElementById('sc-title').value = '';
+    document.getElementById('sc-interval').value = 30;
+    document.getElementById('sc-unit').value = 'days';
+    document.getElementById('sc-first').value = todayKey();
+    document.getElementById('sc-points').value = 5;
+    document.getElementById('sc-notes').value = '';
+    scActionsBuilder = [];
+  }
+  renderScActionsList();
+  document.getElementById('scheduledModalOverlay').classList.add('show');
+  setTimeout(() => document.getElementById('sc-title').focus(), 100);
+}
+
+function renderScActionsList() {
+  const container = document.getElementById('sc-actions-list');
+  if (!container) return;
+  if (!scActionsBuilder.length) {
+    container.innerHTML = `<div style="font-size:12px;color:var(--ink3);font-style:italic;padding:4px 0">No actions yet — each instance spawns with these built in.</div>`;
+    return;
+  }
+  container.innerHTML = scActionsBuilder.map((a, i) => `
+    <div class="action-item">
+      <div class="action-check" style="visibility:hidden"></div>
+      <div class="action-body">
+        <div class="action-text">${escapeHtml(a.text)} <span class="goal-pts" style="margin-left:4px">+${a.points||0}pts</span></div>
+      </div>
+      <div class="action-item-actions">
+        <button class="del-btn" onclick="removeScheduledAction(${i})" title="Remove">✕</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function addScheduledAction() {
+  const input = document.getElementById('sc-action-input');
+  const ptsInput = document.getElementById('sc-action-pts');
+  const text = input.value.trim();
+  if (!text) return;
+  scActionsBuilder.push({ text, points: parseInt(ptsInput.value) || 0 });
+  input.value = '';
+  renderScActionsList();
+}
+
+function removeScheduledAction(idx) {
+  scActionsBuilder.splice(idx, 1);
+  renderScActionsList();
+}
+
+function saveScheduledGoal() {
+  const title = document.getElementById('sc-title').value.trim();
+  if (!title) { showToast('Please enter a title'); return; }
+  const firstDue = document.getElementById('sc-first').value;
+  if (!firstDue) { showToast('Please set a first due date'); return; }
+
+  const data = {
+    title,
+    category: document.getElementById('sc-category').value,
+    interval: parseInt(document.getElementById('sc-interval').value) || 30,
+    unit: document.getElementById('sc-unit').value,
+    firstDue,
+    points: parseInt(document.getElementById('sc-points').value) || 5,
+    notes: document.getElementById('sc-notes').value.trim(),
+    actions: scActionsBuilder.map(a => ({ text: a.text, points: a.points })),
+    active: true,
+  };
+
+  if (editingScheduledId) {
+    const sc = state.scheduledGoals.find(x => x.id === editingScheduledId);
+    Object.assign(sc, data);
+  } else {
+    if (!state.scheduledGoals) state.scheduledGoals = [];
+    state.scheduledGoals.push({ id: state.nextScheduledId++, ...data });
+  }
+  saveState();
+  spawnScheduledInstances(); // immediately spawn if first due ≤ today
+  closeModal('scheduledModalOverlay');
+  renderMain();
+  showToast('✓ Schedule saved');
+}
+
+async function deleteScheduledGoal(id) {
+  const sc = state.scheduledGoals.find(x => x.id === id);
+  const ok = await appConfirm(
+    'Future instances won\'t be created. Existing spawned goals remain in your Goals list.',
+    `Stop scheduling "${sc.title}"?`, 'Stop'
+  );
+  if (!ok) return;
+  state.scheduledGoals = state.scheduledGoals.filter(x => x.id !== id);
+  saveState();
+  renderMain();
+  showToast('Schedule removed');
+}
+
+function toggleScheduledActive(id) {
+  const sc = state.scheduledGoals.find(x => x.id === id);
+  sc.active = !sc.active;
+  saveState();
+  renderMain();
+  showToast(sc.active ? 'Schedule resumed' : 'Schedule paused');
+}
+
+function renderScheduledPage() {
+  if (!state.scheduledGoals) state.scheduledGoals = [];
+  const today = todayKey();
+
+  let html = `<div class="heatmap-title" style="margin-bottom:4px">📅 Scheduled Goals</div>
+  <div class="heatmap-sub" style="margin-bottom:14px">
+    Goals that repeat automatically — pedicures, portfolio reviews, health checkups.
+    Each instance only appears in your Goals list when its due date arrives.
+  </div>
+  <button class="btn btn-primary" style="width:100%;margin-bottom:18px" onclick="openScheduledModal()">+ New Scheduled Goal</button>`;
+
+  if (!state.scheduledGoals.length) {
+    html += `<div class="empty-state"><div class="icon">📅</div>
+      <p>No scheduled goals yet. Add one for anything that repeats — "Update portfolio every 45 days", "Pedicure every month", "Quarterly review every 90 days".</p>
+    </div>`;
+    return html;
+  }
+
+  state.scheduledGoals.forEach(sc => {
+    const cat = state.categories.find(c => c.id === sc.category);
+    const stepDays = intervalToDays(sc.interval, sc.unit);
+    const upcoming = upcomingDates(sc, 4);
+    const next = upcoming[0];
+    const diffDays = next ? Math.round((new Date(next) - new Date(todayKey())) / 86400000) : null;
+
+    let nextCls = '', nextLabel = '';
+    if (diffDays === null) { nextLabel = 'No upcoming dates'; nextCls = ''; }
+    else if (diffDays < 0) { nextLabel = `${Math.abs(diffDays)}d overdue`; nextCls = 'overdue'; }
+    else if (diffDays === 0) { nextLabel = 'Due today'; nextCls = 'due'; }
+    else if (diffDays <= 7) { nextLabel = `Due in ${diffDays} days`; nextCls = 'soon'; }
+    else { nextLabel = `Next: ${new Date(next).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}`; nextCls = ''; }
+
+    const intervalLabel = `Every ${sc.interval} ${sc.unit}`;
+    const liveInstances = state.goals.filter(g => g.scheduledId === sc.id && !g.done);
+    const completedInstances = state.goalHistory.filter(g => g.scheduledId === sc.id);
+
+    html += `<div class="scheduled-card">
+      <div class="scheduled-top">
+        <div class="scheduled-icon">${sc.active ? '🔄' : '⏸️'}</div>
+        <div class="scheduled-body">
+          <div class="scheduled-title">${escapeHtml(sc.title)}</div>
+          <div class="scheduled-meta">
+            ${intervalLabel}
+            ${cat ? `· <span style="color:var(--c-${cat.color})">${escapeHtml(cat.name)}</span>` : ''}
+            · +${sc.points}pts per instance
+            ${sc.actions && sc.actions.length ? `· ${sc.actions.length} action${sc.actions.length!==1?'s':''} included` : ''}
+            ${completedInstances.length ? `· ✓ ${completedInstances.length} done` : ''}
+          </div>
+          ${sc.active ? `<div class="scheduled-next ${nextCls}">📍 ${nextLabel}</div>` : '<div class="scheduled-meta" style="font-style:italic">Paused</div>'}
+        </div>
+        <div class="goal-actions">
+          <button onclick="openScheduledModal(${sc.id})" title="Edit">✎</button>
+          <button onclick="toggleScheduledActive(${sc.id})" title="${sc.active?'Pause':'Resume'}">${sc.active?'⏸':'▶'}</button>
+          <button class="del-btn" onclick="deleteScheduledGoal(${sc.id})" title="Remove">✕</button>
+        </div>
+      </div>`;
+
+    if (upcoming.length > 0 && sc.active) {
+      html += `<div class="scheduled-instances">`;
+      upcoming.slice(0, 4).forEach((d, i) => {
+        const isActive = d <= today;
+        const dLabel = new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+        const spawned = state.goals.find(g => g.scheduledId === sc.id && g.scheduledDue === d);
+        const done = state.goalHistory.find(g => g.scheduledId === sc.id && g.scheduledDue === d);
+        html += `<div class="scheduled-instance-row ${isActive?'active':''}">
+          <span>${dLabel}</span>
+          <span>${done ? '✅ Done' : spawned ? '🔵 Active' : '⬜ Upcoming'}</span>
+        </div>`;
+      });
+      html += `</div>`;
+    }
+
+    if (liveInstances.length) {
+      html += `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--surface2);font-size:12px;color:var(--ink3)">
+        ${liveInstances.length} active instance${liveInstances.length!==1?'s':''} in your Goals list right now
+        <span style="cursor:pointer;color:var(--accent);margin-left:8px" onclick="setTab('${sc.category||'all'}')">→ View</span>
+      </div>`;
+    }
+
+    html += `</div>`;
+  });
+
+  return html;
+}
+
 function renderOverduePage() {
   const today = todayKey();
   const grouped = {};
@@ -3785,7 +4398,8 @@ function renderSettingsPage() {
     <div class="ask-claude-desc" style="margin-bottom:0">
       Code last updated on this device: <b>${updatedLabel}</b><br>
       First installed: <b>${installedLabel}</b><br>
-      Data on this device right now: <b>${goalCount} goals</b> (active + completed), <b>${state.evidenceJournal.length} journal entries</b>, <b>${Object.keys(state.dailyCheckins).length} check-ins</b><br><br>
+      Data on this device right now: <b>${goalCount} goals</b> (active + completed), <b>${state.evidenceJournal.length} journal entries</b>, <b>${Object.keys(state.dailyCheckins).length} check-ins</b>, <b>${state.affirmations.length} affirmations</b>, <b>${state.scheduledGoals.length} scheduled goals</b><br><br>
+      <b>Everything here — including affirmations, your vision, and scheduled goals — is included every time you Export or Push to Cloud.</b><br><br>
       <b>Replacing the HTML file with a new version never deletes this data</b> — your goals live in
       this browser's storage, separate from the code. Export a backup below before any big update,
       just as a safety net.
@@ -4425,6 +5039,24 @@ function mergeIncomingData(incoming) {
       if (!state.dailyCheckins[d]) state.dailyCheckins[d] = incoming.dailyCheckins[d];
     });
   }
+  if (incoming.affirmations) {
+    incoming.affirmations.forEach(a => {
+      if (!state.affirmations.includes(a)) state.affirmations.push(a);
+    });
+  }
+  if (incoming.scheduledGoals) {
+    incoming.scheduledGoals.forEach(sc => {
+      const dup = state.scheduledGoals.find(x =>
+        x.title === sc.title && x.firstDue === sc.firstDue && x.interval === sc.interval && x.unit === sc.unit
+      );
+      if (!dup) {
+        state.scheduledGoals.push({ ...sc, id: state.nextScheduledId++ });
+      }
+    });
+  }
+  if (incoming.bestStreakEver !== undefined) {
+    state.bestStreakEver = Math.max(state.bestStreakEver||0, incoming.bestStreakEver);
+  }
   if (incoming.locationLog) {
     incoming.locationLog.forEach(entry => {
       const dup = state.locationLog.find(x => x.uid === entry.uid && x.date === entry.date && x.to === entry.to);
@@ -4470,6 +5102,7 @@ function showToast(msg) {
 // INIT
 // ═══════════════════════════════════════════════════════════════════
 currentTab = 'dashboard';
+spawnScheduledInstances(); // create any due scheduled goal instances before first render
 renderTabs();
 renderMain();
 
