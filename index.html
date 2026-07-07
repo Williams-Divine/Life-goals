@@ -2115,4 +2115,3204 @@ function openGoalModal(id = null, defaultCat = null) {
     document.getElementById('f-start').value = g.startDate || '';
     document.getElementById('f-deadline').value = g.deadline || '';
     document.getElementById('f-time').value = g.time || '';
-    document.getElementById('f-points').value = g.
+    document.getElementById('f-points').value = g.points || 0;
+    document.getElementById('f-today').checked = g.isToday || false;
+    // Schedule fields — allow converting an existing goal to a schedule
+    document.getElementById('f-scheduled').checked = false;
+    document.getElementById('f-schedule-fields').style.display = 'none';
+    document.getElementById('f-sc-first').value = g.deadline || todayKey();
+    document.getElementById('f-sc-interval').value = 30;
+    document.getElementById('f-sc-unit').value = 'days';
+    populateSubgroupSelect(g.category, g.subgroup);
+  } else {
+    document.getElementById('goalModalTitle').textContent = 'Add Goal';
+    const catId = defaultCat || (currentTab !== 'all' && state.categories.find(c=>c.id===currentTab) ? currentTab : state.categories[0].id);
+    document.getElementById('f-category').value = catId;
+    document.getElementById('f-notes').value = '';
+    document.getElementById('f-start').value = '';
+    document.getElementById('f-deadline').value = '';
+    document.getElementById('f-time').value = '';
+    document.getElementById('f-points').value = 10;
+    document.getElementById('f-today').checked = false;
+    document.getElementById('f-scheduled').checked = false;
+    document.getElementById('f-schedule-fields').style.display = 'none';
+    document.getElementById('f-sc-first').value = todayKey();
+    populateSubgroupSelect(catId, null);
+  }
+  document.getElementById('goalModalOverlay').classList.add('show');
+  setTimeout(() => document.getElementById('f-title').focus(), 100);
+}
+
+function populateSubgroupSelect(catId, currentSubgroupId = null) {
+  const cat = state.categories.find(c => c.id === catId);
+  const row = document.getElementById('f-subgroup-row');
+  const sel = document.getElementById('f-subgroup');
+  if (!cat || !cat.subgroups || !cat.subgroups.length) {
+    row.style.display = 'none';
+    return;
+  }
+  row.style.display = 'block';
+  sel.innerHTML = `<option value="">— None / Ungrouped —</option>` +
+    cat.subgroups.map(sg => `<option value="${sg.id}" ${currentSubgroupId===sg.id?'selected':''}>${sg.name}</option>`).join('');
+  if (currentSubgroupId) sel.value = currentSubgroupId;
+}
+
+function saveGoal() {
+  const title = document.getElementById('f-title').value.trim();
+  if (!title) { showToast('Please enter a title'); return; }
+  const subgroupVal = document.getElementById('f-subgroup').value;
+  const makeScheduled = document.getElementById('f-scheduled').checked;
+
+  // If "make scheduled" is ticked — create a scheduled template
+  if (makeScheduled) {
+    const interval = parseInt(document.getElementById('f-sc-interval').value) || 30;
+    const unit = document.getElementById('f-sc-unit').value;
+    const firstDue = document.getElementById('f-sc-first').value || todayKey();
+    const catId = document.getElementById('f-category').value;
+
+    // Carry over actions from existing goal if editing
+    let templateActions = [];
+    if (editingGoalId) {
+      const existingGoal = state.goals.find(x => x.id === editingGoalId);
+      if (existingGoal) {
+        templateActions = (existingGoal.actions || [])
+          .filter(a => !a.recurring) // only one-time actions make sense as template actions
+          .map(a => ({ text: a.text, points: a.points }));
+        // Remove the one-time goal — it's being converted to a schedule
+        state.goals = state.goals.filter(x => x.id !== editingGoalId);
+      }
+    }
+
+    if (!state.scheduledGoals) state.scheduledGoals = [];
+    state.scheduledGoals.push({
+      id: state.nextScheduledId++,
+      title,
+      category: catId,
+      subgroup: subgroupVal || undefined,
+      interval, unit, firstDue,
+      points: parseInt(document.getElementById('f-points').value) || 5,
+      notes: document.getElementById('f-notes').value.trim(),
+      actions: templateActions,
+      active: true,
+    });
+    saveState();
+    spawnScheduledInstances();
+    closeModal('goalModalOverlay');
+    renderTabs();
+    renderMain();
+    const verb = editingGoalId ? 'Converted to' : 'Added as';
+    showToast(`✓ ${verb} a scheduled goal — repeats every ${interval} ${unit}`);
+    return;
+  }
+
+  const data = {
+    title,
+    category: document.getElementById('f-category').value,
+    notes: document.getElementById('f-notes').value.trim(),
+    startDate: document.getElementById('f-start').value,
+    deadline: document.getElementById('f-deadline').value,
+    time: document.getElementById('f-time').value,
+    points: parseInt(document.getElementById('f-points').value) || 0,
+    isToday: document.getElementById('f-today').checked,
+    subgroup: subgroupVal || undefined,
+  };
+  if (!data.subgroup) delete data.subgroup;
+
+  if (editingGoalId) {
+    const g = state.goals.find(x => x.id === editingGoalId);
+    if (!data.subgroup) delete g.subgroup;
+    Object.assign(g, data);
+    showToast('Goal updated');
+  } else {
+    state.goals.push({ id: state.nextGoalId++, uid: newUID(), done: false, actions: [], ...data });
+    showToast('Goal added');
+  }
+  saveState();
+  closeModal('goalModalOverlay');
+  renderTabs();
+  renderMain();
+}
+
+function toggleGoal(id) {
+  const g = state.goals.find(x => x.id === id);
+  g.done = !g.done;
+  if (g.done) {
+    if (g.actions && g.actions.length) g.actions.forEach(a => a.done = true);
+    logActivity(todayKey(), 1);
+    saveState();
+    moveGoalToHistory(g);
+    renderMain();
+    if (g.points || (g.actions && g.actions.length)) showToast(`✓ Done! +${goalPoints(g)} pts`);
+    return;
+  }
+  saveState();
+  renderMain();
+}
+
+async function deleteGoal(id) {
+  const g = state.goals.find(x => x.id === id);
+  const ok = await appConfirm(`This will permanently remove "${g.title}" and its actions.`, 'Delete this goal?', 'Delete');
+  if (!ok) return;
+  state.goals = state.goals.filter(x => x.id !== id);
+  expandedGoals.delete(id);
+  saveState();
+  renderMain();
+  showToast('Goal deleted');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DASHBOARD (GitHub-style activity heatmap)
+// ═══════════════════════════════════════════════════════════════════
+function renderDashboardPage() {
+  const totalDone = state.goalHistory.length;
+  const totalActionsDone = Object.values(state.dailyLog).reduce((s,v)=>s+v, 0);
+  const activeDays = Object.keys(state.dailyLog).filter(k => state.dailyLog[k] > 0).length;
+
+  // Streak calculation
+  let currentStreak = 0, longestStreak = 0, run = 0;
+  const cursor = new Date(new Date().toDateString());
+  while (true) {
+    const key = dateKey(cursor);
+    if (state.dailyLog[key] > 0) { currentStreak++; cursor.setDate(cursor.getDate()-1); }
+    else break;
+  }
+  // Longest streak across all logged days
+  const allDates = Object.keys(state.dailyLog).filter(k=>state.dailyLog[k]>0).sort();
+  let prevDate = null;
+  allDates.forEach(dStr => {
+    const d = new Date(dStr);
+    if (prevDate && (d - prevDate) === 86400000) { run++; }
+    else { run = 1; }
+    longestStreak = Math.max(longestStreak, run);
+    prevDate = d;
+  });
+
+  // Award +10pts the first time the current streak exceeds the previous best, once per new record
+  maybeAwardStreakRecord(currentStreak);
+
+  // ── ACTIVITY FIRST: today's summary + heatmap ──
+  const todayCount = state.dailyLog[todayKey()] || 0;
+  let html = `<div class="dash-stat-card" style="text-align:left;display:flex;align-items:center;gap:12px;margin-bottom:14px;cursor:pointer" onclick="showTodayBreakdown()">
+    <div style="font-size:28px">${todayCount > 0 ? '✅' : '⬜'}</div>
+    <div style="flex:1">
+      <div style="font-size:14px;font-weight:600;color:var(--ink)">${todayCount} action${todayCount!==1?'s':''} completed today</div>
+      <div style="font-size:12px;color:var(--ink3)">Tap to see what you did today</div>
+    </div>
+    <div style="color:var(--ink3)">›</div>
+  </div>`;
+
+  html += renderHeatmap();
+
+  // ── Stats + streaks ──
+  html += `<div class="dash-summary-row">
+    <div class="dash-stat-card"><div class="dash-stat-val">${totalDone}</div><div class="dash-stat-label">Goals Completed</div></div>
+    <div class="dash-stat-card"><div class="dash-stat-val">${totalActionsDone}</div><div class="dash-stat-label">Actions Done</div></div>
+    <div class="dash-stat-card"><div class="dash-stat-val">${activeDays}</div><div class="dash-stat-label">Active Days</div></div>
+  </div>`;
+
+  html += `<div class="streak-panel">
+    <div class="streak-item"><div class="streak-val">🔥 ${currentStreak}</div><div class="streak-label">Current Streak</div></div>
+    <div class="streak-item"><div class="streak-val">🏅 ${longestStreak}</div><div class="streak-label">Longest Streak</div></div>
+  </div>`;
+
+  html += renderDestinyScore();
+
+  // ── Category progress: MONTHLY, with month pills + year dropdown for scalability ──
+  const now = new Date();
+  if (!dashboardYear) dashboardYear = now.getFullYear();
+  if (dashboardMonth === null || dashboardMonth === undefined) dashboardMonth = now.getMonth();
+
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const monthShort = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  // Year dropdown: from the year the app was first installed (or 2024 fallback) through current year + 0
+  const installYear = state.firstInstalledDate ? new Date(state.firstInstalledDate).getFullYear() : now.getFullYear();
+  const earliestYear = Math.min(installYear, now.getFullYear());
+  const yearOptions = [];
+  for (let y = now.getFullYear(); y >= earliestYear; y--) yearOptions.push(y);
+
+  const isCurrentMonth = dashboardYear === now.getFullYear() && dashboardMonth === now.getMonth();
+
+  html += `<div class="cat-progress-panel">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
+      <div class="heatmap-title" style="margin-bottom:0">Progress by Category</div>
+      <select class="month-year-select" id="dashYearSelect" onchange="setDashboardYear(this.value)">
+        ${yearOptions.map(y => `<option value="${y}" ${y===dashboardYear?'selected':''}>${y}</option>`).join('')}
+      </select>
+    </div>
+    <div class="heatmap-sub" style="margin-bottom:10px">${isCurrentMonth ? 'This month — ' : ''}${monthNames[dashboardMonth]} ${dashboardYear}</div>
+    <div class="month-scroll-wrap" id="monthScrollWrap">
+      <div class="month-pill-row">
+        ${monthShort.map((m, i) => `<div class="month-pill ${i===dashboardMonth?'active':''}" onclick="setDashboardMonth(${i})">${m}</div>`).join('')}
+      </div>
+    </div>`;
+
+  // Filter goalHistory completions to the selected month/year
+  const monthStart = dateKey(new Date(dashboardYear, dashboardMonth, 1));
+  const lastDay = new Date(dashboardYear, dashboardMonth + 1, 0).getDate();
+  const monthEnd = dateKey(new Date(dashboardYear, dashboardMonth, lastDay));
+
+  state.categories.forEach(cat => {
+    // Goals ALLOCATED to this month: goals whose startDate OR deadline falls in this month/year.
+    // If nothing is set for a category this month, it shows 0/0.
+    const goalsForMonth = state.goals.filter(g =>
+      g.category === cat.id &&
+      ((g.startDate && g.startDate >= monthStart && g.startDate <= monthEnd) ||
+       (g.deadline && g.deadline >= monthStart && g.deadline <= monthEnd))
+    );
+    const completedThisMonth = state.goalHistory.filter(g =>
+      g.category === cat.id && g.completedDate >= monthStart && g.completedDate <= monthEnd
+    );
+    const total = goalsForMonth.length + completedThisMonth.length;
+    const done = completedThisMonth.length;
+    const pct = total ? Math.round((done/total)*100) : 0;
+
+    if (total === 0) {
+      // Nothing allocated this month for this category — show greyed out
+      html += `<div class="cat-progress-row" style="opacity:0.4">
+        <div class="cat-progress-label"><span>${escapeHtml(cat.name)}</span><span style="color:var(--ink3)">—</span></div>
+        <div class="cat-progress-bg"><div class="cat-progress-fill" style="width:0%;background:var(--c-${cat.color})"></div></div>
+      </div>`;
+    } else {
+      html += `<div class="cat-progress-row">
+        <div class="cat-progress-label"><span>${escapeHtml(cat.name)}</span><span style="color:var(--ink3)">${done}/${total}</span></div>
+        <div class="cat-progress-bg"><div class="cat-progress-fill" style="width:${pct}%;background:var(--c-${cat.color})"></div></div>
+      </div>`;
+    }
+  });
+  html += `</div>`;
+
+  return html;
+}
+
+function setDashboardYear(year) {
+  dashboardYear = parseInt(year);
+  renderMain();
+}
+
+function setDashboardMonth(monthIdx) {
+  dashboardMonth = monthIdx;
+  renderMain();
+  setTimeout(() => {
+    const monthScroll = document.getElementById('monthScrollWrap');
+    if (monthScroll) {
+      const activePill = monthScroll.querySelector('.month-pill.active');
+      if (activePill && activePill.scrollIntoView) activePill.scrollIntoView({ behavior: 'instant', inline: 'center', block: 'nearest' });
+    }
+  }, 0);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DESTINY SCORE — measures alignment, not just task completion
+// ═══════════════════════════════════════════════════════════════════
+// Computes the % of today's relevant goals/actions that are actually done.
+// "Relevant to today" reuses the same logic as the Today page: isToday flag,
+// deadline === today, or a spanning goal whose window includes today.
+function computeTodayCompletionPct() {
+  const today = todayKey();
+  let totalItems = 0, doneItems = 0;
+
+  state.goals.forEach(g => {
+    if (g.done) return; // already fully completed goals don't count against today
+    const relevantToday = isForToday(g);
+    const todayActions = (g.actions||[]).filter(a => {
+      if (a.recurring && a.occurrences) return a.occurrences.some(o => o.date === today);
+      return a.deadline === today;
+    });
+
+    if (todayActions.length) {
+      todayActions.forEach(a => {
+        if (a.recurring && a.occurrences) {
+          const occ = a.occurrences.find(o => o.date === today);
+          totalItems++; if (occ && occ.done) doneItems++;
+        } else {
+          totalItems++; if (a.done) doneItems++;
+        }
+      });
+    } else if (relevantToday) {
+      totalItems++; if (g.done) doneItems++;
+    }
+  });
+
+  if (totalItems === 0) return 100; // nothing scheduled today = nothing to fall short on
+  return Math.round((doneItems / totalItems) * 100);
+}
+
+function computeDestinyScore() {
+  const today = todayKey();
+  let signals = [];
+
+  // 1. Did I complete at least 80% of today's scheduled goals/actions?
+  const todayPct = computeTodayCompletionPct();
+  signals.push({ label: 'Completed at least 80% of today\'s goals', met: todayPct >= 80 });
+
+  // 2. Did I do a daily check-in today?
+  const checkin = state.dailyCheckins[today];
+  signals.push({ label: 'Did a responsibility check-in today', met: !!(checkin && (checkin.morning || checkin.evening)) });
+
+  // 3. Did I avoid letting things go overdue?
+  const overdueCount = state.goals.filter(g => !g.done && g.deadline && new Date(g.deadline) < new Date(new Date().toDateString())).length;
+  signals.push({ label: 'No overdue goals piling up', met: overdueCount === 0 });
+
+  // 4. Did I log evidence/reflection today?
+  const evidenceToday = state.evidenceJournal.some(e => dateKey(new Date(e.date)) === today);
+  signals.push({ label: 'Logged a reflection or evidence entry', met: evidenceToday });
+
+  // 5. Am I actively progressing (streak alive)?
+  signals.push({ label: 'Current streak is alive', met: (state.dailyLog[today]||0) > 0 || (state.dailyLog[dateKey(new Date(Date.now()-86400000))]||0) > 0 });
+
+  const metCount = signals.filter(s => s.met).length;
+  const pct = Math.round((metCount / signals.length) * 100);
+  return { pct, signals };
+}
+
+function renderDestinyScore() {
+  const { pct, signals } = computeDestinyScore();
+  const color = pct >= 80 ? 'var(--done)' : pct >= 50 ? 'var(--c-health)' : 'var(--danger)';
+
+  // Award a one-time bonus the first time today's score hits 100%
+  if (pct === 100) {
+    maybeAwardDestinyBonus();
+  }
+
+  let html = `<div class="heatmap-panel" style="margin-bottom:18px">
+    <div class="heatmap-title">🧭 Destiny Score</div>
+    <div class="heatmap-sub">Not productivity — alignment. Are you living like the person in your blueprint? Hit 100% for a +10pt bonus.</div>
+    <div style="text-align:center;margin:14px 0">
+      <div style="font-family:var(--serif);font-size:42px;font-weight:600;color:${color}">${pct}%</div>
+      ${pct === 100 ? `<div style="font-size:12px;color:var(--done);font-weight:600;margin-top:4px">🎉 Bonus earned for today!</div>` : ''}
+    </div>`;
+  signals.forEach(s => {
+    html += `<div class="destiny-q-row">
+      <div class="destiny-q-text">${escapeHtml(s.label)}</div>
+      <div class="yn-toggle"><span class="yn-btn ${s.met?'active-yes':'active-no'}">${s.met?'Yes':'No'}</span></div>
+    </div>`;
+  });
+  html += `</div>`;
+  return html;
+}
+
+// Awards +10pts the first time the Destiny Score hits 100% on a given day.
+// Tracked via state.destinyBonusLog so it can never be earned twice for the same date.
+function maybeAwardDestinyBonus() {
+  if (!state.destinyBonusLog) state.destinyBonusLog = [];
+  const today = todayKey();
+  if (state.destinyBonusLog.includes(today)) return; // already awarded today
+
+  state.destinyBonusLog.push(today);
+  state.goalHistory.push({
+    id: state.nextGoalId++, uid: newUID(),
+    title: '🧭 Destiny Score 100% — full alignment day',
+    category: state.categories[0].id,
+    deadline: today, completedDate: today,
+    points: 10, done: true, actions: [], isDestinyBonus: true
+  });
+  saveState();
+  showToast('🎉 100% Destiny Score — +10pts bonus!');
+}
+
+// Awards +10pts the moment your CURRENT streak exceeds your previous all-time best.
+// Tracked via state.bestStreakEver + state.streakRecordLog so it only fires once
+// per new record (not every render while you stay at the new best).
+function maybeAwardStreakRecord(currentStreak) {
+  if (!state.bestStreakEver) state.bestStreakEver = 0;
+  if (!state.streakRecordLog) state.streakRecordLog = [];
+  const today = todayKey();
+
+  if (currentStreak > state.bestStreakEver && !state.streakRecordLog.includes(today)) {
+    const oldBest = state.bestStreakEver;
+    state.bestStreakEver = currentStreak;
+    state.streakRecordLog.push(today);
+    state.goalHistory.push({
+      id: state.nextGoalId++, uid: newUID(),
+      title: `🔥 New longest streak — ${currentStreak} days!`,
+      category: state.categories[0].id,
+      deadline: today, completedDate: today,
+      points: 10, done: true, actions: [], isStreakBonus: true
+    });
+    saveState();
+    if (oldBest > 0) showToast(`🔥 New record! ${currentStreak}-day streak — +10pts bonus!`);
+  } else if (currentStreak > state.bestStreakEver) {
+    // Safety net: streak grew but for some reason today wasn't logged as awarded yet
+    state.bestStreakEver = currentStreak;
+    saveState();
+  }
+}
+
+function renderHeatmap() {
+  // Build last 26 weeks (≈6 months) ending today, GitHub style, Sun-Sat columns.
+  // Ordered NEWEST FIRST (current week leftmost) so the current month is visible
+  // by default with no scrolling — scrolling right reveals past months.
+  const today = new Date(new Date().toDateString());
+  const weeksToShow = 26;
+  const totalDays = weeksToShow * 7;
+
+  // Find the most recent Saturday (end of current week column) and walk back
+  const endDate = new Date(today);
+  const endDow = endDate.getDay(); // 0=Sun..6=Sat
+  endDate.setDate(endDate.getDate() + (6 - endDow)); // extend to Saturday
+
+  const startDate = new Date(endDate);
+  startDate.setDate(startDate.getDate() - totalDays + 1);
+
+  const maxCount = Math.max(1, ...Object.values(state.dailyLog));
+
+  function levelFor(count) {
+    if (!count) return '';
+    const ratio = count / maxCount;
+    if (ratio > 0.75) return 'l4';
+    if (ratio > 0.5) return 'l3';
+    if (ratio > 0.2) return 'l2';
+    return 'l1';
+  }
+
+  let weeks = [];
+  let cursor = new Date(startDate);
+  for (let w = 0; w < weeksToShow; w++) {
+    let days = [];
+    for (let d = 0; d < 7; d++) {
+      const key = dateKey(cursor);
+      const isFuture = cursor > today;
+      const count = state.dailyLog[key] || 0;
+      days.push({ key, count, isFuture, date: new Date(cursor) });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    weeks.push(days);
+  }
+  weeks = weeks; // oldest left, newest right — auto-scroll brings current month into view
+
+  // Month labels: check FIRST day of each week for month change
+  let monthLabels = [];
+  let lastMonth = null;
+  weeks.forEach(week => {
+    const firstDay = week[0].date;
+    const m = firstDay.toLocaleDateString('en-GB', { month: 'short' });
+    if (m !== lastMonth) { monthLabels.push(m); lastMonth = m; }
+    else { monthLabels.push(''); }
+  });
+
+  const monthsHTML = `<div class="heatmap-months">${weeks.map((w,i) => `<div style="width:13px">${monthLabels[i]}</div>`).join('')}</div>`;
+
+  const gridHTML = `<div class="heatmap-grid">${weeks.map(week => `
+    <div class="heatmap-week">${week.map(day => {
+      if (day.isFuture) return `<div class="heatmap-day" style="background:transparent"></div>`;
+      const lvl = levelFor(day.count);
+      const dateLabel = day.date.toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short' });
+      const actionLabel = day.count ? `${day.count} action${day.count!==1?'s':''} completed` : 'No activity';
+      return `<div class="heatmap-day-wrap">
+        <div class="heatmap-day ${lvl}"></div>
+        <div class="heatmap-tooltip">${actionLabel} · ${dateLabel}</div>
+      </div>`;
+    }).join('')}</div>
+  `).join('')}</div>`;
+
+  return `<div class="heatmap-panel">
+    <div class="heatmap-title">Activity</div>
+    <div class="heatmap-sub">Each box is a day. Darker = more actions completed that day.</div>
+    <div class="heatmap-scroll-wrap" id="heatmapScrollWrap">
+      ${monthsHTML}
+      ${gridHTML}
+    </div>
+    <div class="heatmap-legend">
+      Less
+      <div class="heatmap-day"></div>
+      <div class="heatmap-day l1"></div>
+      <div class="heatmap-day l2"></div>
+      <div class="heatmap-day l3"></div>
+      <div class="heatmap-day l4"></div>
+      More
+    </div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// HISTORY PAGE
+// ═══════════════════════════════════════════════════════════════════
+let historyFilter = 'all';
+let dashboardYear = null; // null = current year, set on first render
+let dashboardMonth = null; // null = current month, set on first render
+function renderHistoryPage() {
+  let html = `<div class="cat-pills-row" style="display:flex;margin:0 -14px 14px;padding:0 14px 10px;border-bottom:1px solid var(--border)">
+    <div class="cat-pill ${historyFilter==='all'?'active':''}" onclick="setHistoryFilter('all')">All</div>
+    ${state.categories.map(c => `<div class="cat-pill ${historyFilter===c.id?'active':''}" onclick="setHistoryFilter('${c.id}')" style="${historyFilter===c.id?`background:var(--c-${c.color});border-color:var(--c-${c.color})`:''}">${escapeHtml(c.name)}</div>`).join('')}
+  </div>`;
+
+  let items = [...state.goalHistory];
+  if (historyFilter !== 'all') items = items.filter(g => g.category === historyFilter);
+  items.sort((a,b) => new Date(b.completedDate||0) - new Date(a.completedDate||0));
+
+  if (!items.length) {
+    html += `<div class="empty-state"><div class="icon">🏆</div><p>No completed goals yet — they'll show up here once you finish something!</p></div>`;
+    return html;
+  }
+
+  items.forEach(g => {
+    const cat = state.categories.find(c => c.id === g.category);
+    const dateLabel = g.completedDate ? new Date(g.completedDate).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '';
+    html += `<div class="history-card">
+      <div class="history-top">
+        <div class="history-badge">✅</div>
+        <div class="history-body">
+          <div class="history-title">${escapeHtml(g.title)}</div>
+          <div class="history-meta">
+            ${cat ? `<span class="history-cat-tag" style="background:var(--c-${cat.color}-l);color:var(--c-${cat.color})">${escapeHtml(cat.name)}</span>` : ''}
+            <span>Completed ${dateLabel}</span>
+            <span class="goal-pts">+${goalPoints(g)} pts</span>
+            ${g.uid && getLocationHistory(g.uid).length ? `<span class="journey-tag" onclick="showJourneyPopup('${g.uid}','${escapeHtml(g.title).replace(/'/g,"\\'")}')">📍 Journey</span>` : ''}
+          </div>
+          ${g.actions && g.actions.length ? `<div class="history-actions-list">${g.actions.map(a => a.recurring
+              ? `<div class="history-action-item">🔁 ${escapeHtml(a.text)} — ${a.occurrences.filter(o=>o.done).length}/${a.occurrences.length} days (+${actionEarnedPoints(a)}pts)</div>`
+              : `<div class="history-action-item">✓ ${escapeHtml(a.text)} (+${a.points||0}pts)</div>`
+            ).join('')}</div>` : ''}
+        </div>
+        <div class="history-actions">
+          <button onclick="duplicateGoal(${g.id})">⧉ Reuse</button>
+        </div>
+      </div>
+    </div>`;
+  });
+
+  return html;
+}
+
+function setHistoryFilter(id) { historyFilter = id; renderMain(); }
+
+// ═══════════════════════════════════════════════════════════════════
+// DESTINY BLUEPRINT (Vision statement + future-self avatar + horizons)
+// ═══════════════════════════════════════════════════════════════════
+const AVATAR_OPTIONS = ['✨','🦋','🌳','🦅','🌅','👑','🔥','🌊','🕊️','💎'];
+
+function renderBlueprintPage() {
+  const db = state.destinyBlueprint;
+  let html = `<div class="vision-hero">
+    <div class="avatar-big">${db.avatarEmoji}</div>
+    <div class="vision-hero-title">My Destiny Blueprint</div>
+    <div class="vision-hero-sub">Before the goals, the plans, the tasks — who are you becoming? Define that first. Inspired by Take Charge of Your Destiny's "Compelling Vision."</div>
+  </div>`;
+
+  html += `<div class="vision-section">
+    <div class="vision-q">Choose a symbol for your future self</div>
+    <div class="avatar-picker-row">
+      ${AVATAR_OPTIONS.map(em => `<div class="avatar-option ${db.avatarEmoji===em?'selected':''}" onclick="selectAvatar('${em}')">${em}</div>`).join('')}
+    </div>
+  </div>`;
+
+  html += `<div class="vision-section">
+    <div class="vision-q">My Vision Statement</div>
+    <textarea class="vision-textarea" id="db-statement" placeholder="In one or two sentences: who are you becoming, and what does that life feel like?">${escapeHtml(db.statement||'')}</textarea>
+  </div>`;
+
+  html += `<div class="vision-section">
+    <div class="vision-q" style="margin-bottom:10px">Time Horizons</div>
+    <div class="horizon-grid">
+      <div class="horizon-card">
+        <div class="horizon-label">📍 6 Months</div>
+        <textarea class="horizon-textarea" id="db-six" placeholder="Where will you be in 6 months?">${escapeHtml(db.sixMonth||'')}</textarea>
+      </div>
+      <div class="horizon-card">
+        <div class="horizon-label">🌱 1 Year</div>
+        <textarea class="horizon-textarea" id="db-one" placeholder="What does this time next year look like?">${escapeHtml(db.oneYear||'')}</textarea>
+      </div>
+      <div class="horizon-card">
+        <div class="horizon-label">🌳 5 Years</div>
+        <textarea class="horizon-textarea" id="db-five" placeholder="Who have you become in 5 years?">${escapeHtml(db.fiveYear||'')}</textarea>
+      </div>
+      <div class="horizon-card">
+        <div class="horizon-label">🏔️ 10 Years</div>
+        <textarea class="horizon-textarea" id="db-ten" placeholder="What's your legacy at this 10-year point?">${escapeHtml(db.tenYear||'')}</textarea>
+      </div>
+    </div>
+  </div>`;
+
+  html += `<div class="vision-section">
+    <div class="vision-q">Going Deeper</div>
+    <textarea class="vision-textarea" id="vision-fulfilled" placeholder="What does a fulfilled life feel like to you?">${escapeHtml(state.visionPage.fulfilled||'')}</textarea>
+  </div>
+  <div class="vision-section">
+    <div class="vision-q">An ideal morning in that future</div>
+    <textarea class="vision-textarea" id="vision-morning" placeholder="Describe it...">${escapeHtml(state.visionPage.morning||'')}</textarea>
+  </div>
+  <div class="vision-section">
+    <div class="vision-q">Your legacy</div>
+    <textarea class="vision-textarea" id="vision-legacy" placeholder="What would you want people to say about your impact?">${escapeHtml(state.visionPage.legacy||'')}</textarea>
+  </div>`;
+
+  html += `<div class="vision-save-row">
+    <button class="btn btn-primary" style="width:100%;margin-bottom:8px" onclick="saveBlueprint()">Save Changes</button>
+    <button class="btn btn-ghost" style="width:100%" onclick="snapshotBlueprintSeason()">📸 Save as New Season (keep this version in history)</button>
+  </div>`;
+
+  if (state.blueprintHistory.length) {
+    html += `<div class="heatmap-title" style="margin:20px 0 4px">Past Seasons</div>
+    <div class="heatmap-sub" style="margin-bottom:12px">Snapshots you've saved over time — see how your vision has evolved.</div>`;
+    [...state.blueprintHistory].reverse().forEach(snap => {
+      html += `<div class="evidence-entry">
+        <div class="evidence-entry-date">${snap.avatarEmoji} ${new Date(snap.savedDate).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}${snap.label?` — ${escapeHtml(snap.label)}`:''}</div>
+        ${snap.statement ? `<div class="evidence-entry-text" style="margin-top:4px"><b>Vision:</b> ${escapeHtml(snap.statement)}</div>` : ''}
+        ${snap.oneYear ? `<div class="evidence-entry-text" style="margin-top:4px"><b>1yr then:</b> ${escapeHtml(snap.oneYear)}</div>` : ''}
+        <div style="margin-top:8px"><button class="history-actions" style="padding:6px 12px;border-radius:8px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;font-size:11.5px" onclick="compareToSeason(${snap.id})">Compare to today</button></div>
+      </div>`;
+    });
+  }
+
+  return html;
+}
+
+async function snapshotBlueprintSeason() {
+  saveBlueprint(false);
+  const label = ''; // could prompt, but keep simple/non-blocking
+  const db = state.destinyBlueprint;
+  const v = state.visionPage;
+  state.blueprintHistory.push({
+    id: state.nextBlueprintSnapshotId++,
+    uid: newUID(),
+    savedDate: new Date().toISOString(),
+    avatarEmoji: db.avatarEmoji,
+    statement: db.statement,
+    sixMonth: db.sixMonth, oneYear: db.oneYear, fiveYear: db.fiveYear, tenYear: db.tenYear,
+    fulfilled: v.fulfilled, morning: v.morning, legacy: v.legacy,
+    label,
+  });
+  saveState();
+  renderMain();
+  showToast('📸 Season saved — you can compare against it later');
+}
+
+function compareToSeason(snapId) {
+  const snap = state.blueprintHistory.find(s => s.id === snapId);
+  if (!snap) return;
+  const db = state.destinyBlueprint;
+  const v = state.visionPage;
+  document.getElementById('completionEmoji').textContent = '🔄';
+  document.getElementById('completionTitle').textContent = 'Then vs. Now';
+  document.getElementById('completionSub').textContent = `Comparing ${new Date(snap.savedDate).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})} to today`;
+  let rows = '';
+  const pairs = [
+    ['Vision Statement', snap.statement, db.statement],
+    ['1-Year Horizon', snap.oneYear, db.oneYear],
+    ['5-Year Horizon', snap.fiveYear, db.fiveYear],
+    ['Fulfilled Life', snap.fulfilled, v.fulfilled],
+  ];
+  pairs.forEach(([label, then, now]) => {
+    if (then || now) {
+      rows += `<div style="text-align:left;margin-bottom:10px">
+        <div style="font-size:11px;color:var(--ink3);font-weight:600;margin-bottom:2px">${label}</div>
+        <div style="font-size:12px;color:var(--ink3);margin-bottom:2px">Then: ${escapeHtml(then||'(blank)')}</div>
+        <div style="font-size:12px;color:var(--ink)">Now: ${escapeHtml(now||'(blank)')}</div>
+      </div>`;
+    }
+  });
+  document.getElementById('completionList').innerHTML = rows || `<div style="color:var(--ink3);font-style:italic">Nothing to compare yet</div>`;
+  document.getElementById('completionPts').textContent = '';
+  document.getElementById('completionOverlay').classList.add('show');
+}
+
+function selectAvatar(em) {
+  state.destinyBlueprint.avatarEmoji = em;
+  saveState();
+  renderMain();
+}
+
+function saveBlueprint(showToastMsg = true) {
+  const db = state.destinyBlueprint;
+  db.statement = (document.getElementById('db-statement')||{}).value ?? db.statement;
+  db.sixMonth  = (document.getElementById('db-six')||{}).value ?? db.sixMonth;
+  db.oneYear   = (document.getElementById('db-one')||{}).value ?? db.oneYear;
+  db.fiveYear  = (document.getElementById('db-five')||{}).value ?? db.fiveYear;
+  db.tenYear   = (document.getElementById('db-ten')||{}).value ?? db.tenYear;
+  state.visionPage.fulfilled = (document.getElementById('vision-fulfilled')||{}).value ?? state.visionPage.fulfilled;
+  state.visionPage.morning   = (document.getElementById('vision-morning')||{}).value ?? state.visionPage.morning;
+  state.visionPage.legacy    = (document.getElementById('vision-legacy')||{}).value ?? state.visionPage.legacy;
+  saveState();
+  if (showToastMsg) showToast('✓ Saved');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// TODAY PAGE — quick view of everything due/relevant today
+// ═══════════════════════════════════════════════════════════════════
+// Returns true if a goal/action is relevant for today
+function isForToday(g) {
+  const today = todayKey();
+  if (g.isToday) return true;
+  if (g.deadline && g.deadline === today) return true;
+  // Spanning goal: has a startDate on or before today AND deadline on or after today
+  if (g.startDate && g.deadline && g.startDate <= today && g.deadline >= today) return true;
+  // Goal with startDate today (no deadline set yet)
+  if (g.startDate && g.startDate === today) return true;
+  return false;
+}
+
+function isGoalInRange(g, rangeStart, rangeEnd) {
+  // Appears in range if:
+  // 1. Deadline falls within range
+  if (g.deadline && g.deadline >= rangeStart && g.deadline <= rangeEnd) return true;
+  // 2. Spanning goal: startDate ≤ rangeEnd AND deadline ≥ rangeStart (overlaps the window)
+  if (g.startDate && g.deadline && g.startDate <= rangeEnd && g.deadline >= rangeStart) return true;
+  // 3. isToday flag when range includes today
+  if (g.isToday && rangeStart <= todayKey() && rangeEnd >= todayKey()) return true;
+  return false;
+}
+
+// Horizon definitions: id, label, and how many days ahead the window extends (inclusive of today)
+const TASK_HORIZONS = [
+  { id: 'today',    label: 'Today',     days: 0 },
+  { id: 'tomorrow', label: 'Tomorrow',  days: 1, exact: true }, // exact: only that single day, not a range
+  { id: 'week',     label: 'This Week', days: 7 },
+  { id: 'month',    label: 'This Month', days: 30 },
+  { id: '3months',  label: '3 Months',  days: 90 },
+  { id: '6months',  label: '6 Months',  days: 182 },
+];
+let taskHorizon = 'today';
+
+function setTaskHorizon(id) {
+  taskHorizon = id;
+  renderMain();
+}
+
+function renderTodayPage() {
+  const horizon = TASK_HORIZONS.find(h => h.id === taskHorizon) || TASK_HORIZONS[0];
+  const todayD = new Date(new Date().toDateString());
+  const todayKeyStr = todayKey();
+
+  let rangeStart, rangeEnd;
+  if (horizon.exact) {
+    const d = new Date(todayD); d.setDate(d.getDate() + horizon.days);
+    rangeStart = rangeEnd = dateKey(d);
+  } else {
+    rangeStart = todayKeyStr;
+    const endD = new Date(todayD); endD.setDate(endD.getDate() + horizon.days);
+    rangeEnd = dateKey(endD);
+  }
+
+  // Horizon selector row
+  let html = `<div class="cat-pills-row" style="display:flex;margin:0 -14px 14px;padding:0 14px 10px;border-bottom:1px solid var(--border)">
+    ${TASK_HORIZONS.map(h => `<div class="cat-pill ${taskHorizon===h.id?'active':''}" onclick="setTaskHorizon('${h.id}')">${h.label}</div>`).join('')}
+  </div>`;
+
+  // Build grouped structure: { catId -> { cat, goals: [ { goal, actions[], showGoal, dateLabel } ] } }
+  const grouped = {};
+  let totalCount = 0;
+
+  function inRange(dateStr) {
+    return dateStr >= rangeStart && dateStr <= rangeEnd;
+  }
+
+  state.goals.forEach(g => {
+    if (g.done) return;
+    const goalInRange = taskHorizon === 'today'
+      ? isForToday(g)
+      : isGoalInRange(g, rangeStart, rangeEnd);
+
+    const matchingActions = (g.actions||[]).filter(a => {
+      if (a.recurring && a.occurrences) return a.occurrences.some(o => inRange(o.date) && !o.done);
+      return !a.done && a.deadline && inRange(a.deadline);
+    });
+
+    if (!goalInRange && !matchingActions.length) return;
+
+    const cat = state.categories.find(c => c.id === g.category);
+    if (!grouped[g.category]) grouped[g.category] = { cat, goals: [] };
+
+    grouped[g.category].goals.push({ goal: g, actions: matchingActions, showGoal: goalInRange && !matchingActions.length });
+    totalCount++;
+  });
+
+  const allEmpty = Object.keys(grouped).length === 0;
+  const doneCount = state.dailyLog[todayKeyStr] || 0;
+
+  const summaryLabel = horizon.exact
+    ? new Date(rangeStart).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short'})
+    : `${new Date(rangeStart).toLocaleDateString('en-GB',{day:'numeric',month:'short'})} – ${new Date(rangeEnd).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}`;
+
+  html += `<div class="dash-summary-row" style="grid-template-columns:1fr 1fr;margin-bottom:14px">
+    <div class="dash-stat-card"><div class="dash-stat-val">${totalCount}</div><div class="dash-stat-label">${horizon.label} — items</div></div>
+    <div class="dash-stat-card"><div class="dash-stat-val" style="font-size:15px">${summaryLabel}</div><div class="dash-stat-label">${taskHorizon==='today'?`${doneCount} done today`:'Date range'}</div></div>
+  </div>`;
+
+  if (allEmpty) {
+    const msg = taskHorizon === 'today'
+      ? 'Nothing scheduled for today. Tap <b>+</b> and check "Add to today\'s tasks", or set a deadline of today on any goal or action.'
+      : `Nothing with a deadline in this window yet. Set deadlines on goals or actions to see them show up under ${horizon.label}.`;
+    html += `<div class="empty-state"><div class="icon">☀️</div><p>${msg}</p></div>`;
+  } else {
+    Object.values(grouped).forEach(({ cat, goals }) => {
+      html += `<div class="category-section">`;
+      if (cat) html += `<div class="category-head"><div class="cat-dot" style="background:var(--c-${cat.color})"></div><div class="cat-name" style="font-size:14px">${escapeHtml(cat.name)}</div></div>`;
+
+      goals.forEach(({ goal, actions, showGoal }) => {
+        html += `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;box-shadow:var(--shadow)">`;
+        html += `<div style="font-size:13.5px;font-weight:500;color:var(--ink);margin-bottom:${actions.length?'8px':'0'}">${escapeHtml(goal.title)}`;
+        if (goal.time) html += `<span class="goal-deadline" style="margin-left:6px">⏰ ${goal.time}</span>`;
+        if (goal.deadline && taskHorizon !== 'today') html += `<span class="goal-deadline" style="margin-left:6px">📅 ${new Date(goal.deadline).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span>`;
+        html += `</div>`;
+
+        if (showGoal && !actions.length) {
+          html += `<div class="quick-task-row" style="padding:0;border:none;background:none;margin:0">
+            <div class="goal-check ${goal.done?'checked':''}" style="width:22px;height:22px" onclick="toggleGoal(${goal.id})"></div>
+            <div class="quick-task-text ${goal.done?'done':''}">Mark complete</div>
+          </div>`;
+        }
+
+        actions.forEach(a => {
+          if (a.recurring && a.occurrences) {
+            const occsInRange = a.occurrences.filter(o => inRange(o.date));
+            occsInRange.forEach(occ => {
+              const dateLabel = taskHorizon !== 'today' ? `<span style="color:var(--ink3);font-size:11px;margin-left:4px">${new Date(occ.date).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span>` : '';
+              html += `<div class="quick-task-row" style="padding:4px 0;border:none;background:none;margin:0">
+                <div class="goal-check ${occ.done?'checked':''}" style="width:22px;height:22px" onclick="toggleOccurrence(${goal.id},${a.id},'${occ.date}')"></div>
+                <div class="quick-task-text ${occ.done?'done':''}">${escapeHtml(a.text)} <span style="color:var(--ink3);font-size:11px">+${a.points||0}pts</span>${dateLabel}</div>
+              </div>`;
+            });
+          } else {
+            const dateLabel = taskHorizon !== 'today' && a.deadline ? `<span style="color:var(--ink3);font-size:11px;margin-left:4px">${new Date(a.deadline).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span>` : '';
+            html += `<div class="quick-task-row" style="padding:4px 0;border:none;background:none;margin:0">
+              <div class="goal-check ${a.done?'checked':''}" style="width:22px;height:22px" onclick="toggleAction(${goal.id},${a.id})"></div>
+              <div class="quick-task-text ${a.done?'done':''}">${escapeHtml(a.text)} <span style="color:var(--ink3);font-size:11px">+${a.points||0}pts</span>${dateLabel}</div>
+            </div>`;
+          }
+        });
+        html += `</div>`;
+      });
+      html += `</div>`;
+    });
+  }
+  return html;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// OVERDUE PAGE — separate from Today as requested
+// ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+// SCHEDULED GOALS — goal templates that auto-spawn instances on a
+// repeating schedule. Instances only appear in Goals list when due.
+// ═══════════════════════════════════════════════════════════════════
+
+function intervalToDays(interval, unit) {
+  if (unit === 'days') return interval;
+  if (unit === 'weeks') return interval * 7;
+  if (unit === 'months') return interval * 30;
+  return interval;
+}
+
+function nextDueDate(sc) {
+  // Find the next date after today that this schedule fires
+  const today = todayKey();
+  let cursor = new Date(sc.firstDue);
+  const stepDays = intervalToDays(sc.interval, sc.unit);
+  // Fast-forward to the next occurrence on or after today
+  while (dateKey(cursor) < today) {
+    cursor.setDate(cursor.getDate() + stepDays);
+  }
+  return dateKey(cursor);
+}
+
+function upcomingDates(sc, count = 5) {
+  const dates = [];
+  let cursor = new Date(sc.firstDue);
+  const stepDays = intervalToDays(sc.interval, sc.unit);
+  const today = todayKey();
+  let safeguard = 0;
+  while (dates.length < count && safeguard++ < 500) {
+    const d = dateKey(cursor);
+    if (d >= today) dates.push(d);
+    cursor.setDate(cursor.getDate() + stepDays);
+  }
+  return dates;
+}
+
+function spawnScheduledInstances() {
+  // Called on app load. For each scheduled goal, create a real goal
+  // in state.goals if the next due date has arrived and no live
+  // instance already exists for that occurrence.
+  if (!state.scheduledGoals) return;
+  const today = todayKey();
+  let spawned = 0;
+  state.scheduledGoals.forEach(sc => {
+    if (!sc.active) return;
+    // Find all due dates up to and including today
+    const stepDays = intervalToDays(sc.interval, sc.unit);
+    let cursor = new Date(sc.firstDue);
+    const safeguard = 500;
+    let count = 0;
+    while (dateKey(cursor) <= today && count++ < safeguard) {
+      const dueDate = dateKey(cursor);
+      // Check if an instance for this exact dueDate already exists
+      const alreadySpawned = state.goals.find(g =>
+        g.scheduledId === sc.id && g.scheduledDue === dueDate
+      ) || state.goalHistory.find(g =>
+        g.scheduledId === sc.id && g.scheduledDue === dueDate
+      );
+      if (!alreadySpawned) {
+        const cat = state.categories.find(c => c.id === sc.category) || state.categories[0];
+        // Clone the template's actions fresh for this instance — each occurrence
+        // gets its own independent action set with new ids/uids, all undone.
+        const instanceActions = (sc.actions || []).map(a => ({
+          id: state.nextActionId++,
+          uid: newUID(),
+          text: a.text,
+          points: a.points || 0,
+          done: false,
+        }));
+        state.goals.push({
+          id: state.nextGoalId++,
+          uid: newUID(),
+          title: sc.title,
+          category: sc.category || cat.id,
+          subgroup: sc.subgroup || undefined,
+          notes: sc.notes || '',
+          startDate: dueDate,
+          deadline: dueDate,
+          points: sc.points || 5,
+          done: false,
+          actions: instanceActions,
+          isToday: false,
+          scheduledId: sc.id,        // link back to the template
+          scheduledDue: dueDate,     // which occurrence this is
+        });
+        spawned++;
+      }
+      cursor.setDate(cursor.getDate() + stepDays);
+    }
+  });
+  if (spawned > 0) saveState();
+}
+
+let editingScheduledId = null;
+let scActionsBuilder = []; // temp list of {text, points} while the modal is open
+
+function populateScSubgroupSelect(catId, currentSgId = null) {
+  const cat = state.categories.find(c => c.id === catId);
+  const row = document.getElementById('sc-subgroup-row');
+  const sel = document.getElementById('sc-subgroup');
+  if (!cat || !cat.subgroups || !cat.subgroups.length) { if(row) row.style.display = 'none'; return; }
+  if(row) row.style.display = 'block';
+  sel.innerHTML = `<option value="">— None / Ungrouped —</option>` +
+    cat.subgroups.map(sg => `<option value="${sg.id}" ${currentSgId===sg.id?'selected':''}>${escapeHtml(sg.name)}</option>`).join('');
+  if (currentSgId) sel.value = currentSgId;
+}
+
+function toggleGoalScheduleFields() {
+  const checked = document.getElementById('f-scheduled').checked;
+  document.getElementById('f-schedule-fields').style.display = checked ? 'block' : 'none';
+  if (checked && !document.getElementById('f-sc-first').value) {
+    document.getElementById('f-sc-first').value = document.getElementById('f-deadline').value || todayKey();
+  }
+}
+
+function openScheduledModal(id = null) {
+  editingScheduledId = id;
+  const sel = document.getElementById('sc-category');
+  sel.innerHTML = state.categories.map(c =>
+    `<option value="${c.id}">${escapeHtml(c.name)}</option>`
+  ).join('');
+  sel.onchange = () => populateScSubgroupSelect(sel.value);
+
+  if (id) {
+    const sc = state.scheduledGoals.find(x => x.id === id);
+    document.getElementById('scheduledModalTitle').textContent = 'Edit Schedule';
+    document.getElementById('sc-title').value = sc.title;
+    document.getElementById('sc-category').value = sc.category;
+    document.getElementById('sc-interval').value = sc.interval;
+    document.getElementById('sc-unit').value = sc.unit;
+    document.getElementById('sc-first').value = sc.firstDue;
+    document.getElementById('sc-points').value = sc.points;
+    document.getElementById('sc-notes').value = sc.notes || '';
+    scActionsBuilder = (sc.actions || []).map(a => ({ text: a.text, points: a.points }));
+    populateScSubgroupSelect(sc.category, sc.subgroup);
+  } else {
+    document.getElementById('scheduledModalTitle').textContent = 'New Scheduled Goal';
+    document.getElementById('sc-title').value = '';
+    if (state.categories[0]) document.getElementById('sc-category').value = state.categories[0].id;
+    document.getElementById('sc-interval').value = 30;
+    document.getElementById('sc-unit').value = 'days';
+    document.getElementById('sc-first').value = todayKey();
+    document.getElementById('sc-points').value = 5;
+    document.getElementById('sc-notes').value = '';
+    scActionsBuilder = [];
+    if (state.categories[0]) populateScSubgroupSelect(state.categories[0].id);
+  }
+  renderScActionsList();
+  document.getElementById('scheduledModalOverlay').classList.add('show');
+  setTimeout(() => document.getElementById('sc-title').focus(), 100);
+}
+
+function renderScActionsList() {
+  const container = document.getElementById('sc-actions-list');
+  if (!container) return;
+  if (!scActionsBuilder.length) {
+    container.innerHTML = `<div style="font-size:12px;color:var(--ink3);font-style:italic;padding:4px 0">No actions yet — each instance spawns with these built in.</div>`;
+    return;
+  }
+  container.innerHTML = scActionsBuilder.map((a, i) => `
+    <div class="action-item">
+      <div class="action-check" style="visibility:hidden"></div>
+      <div class="action-body">
+        <div class="action-text">${escapeHtml(a.text)} <span class="goal-pts" style="margin-left:4px">+${a.points||0}pts</span></div>
+      </div>
+      <div class="action-item-actions">
+        <button class="del-btn" onclick="removeScheduledAction(${i})" title="Remove">✕</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function addScheduledAction() {
+  const input = document.getElementById('sc-action-input');
+  const ptsInput = document.getElementById('sc-action-pts');
+  const text = input.value.trim();
+  if (!text) return;
+  scActionsBuilder.push({ text, points: parseInt(ptsInput.value) || 0 });
+  input.value = '';
+  renderScActionsList();
+}
+
+function removeScheduledAction(idx) {
+  scActionsBuilder.splice(idx, 1);
+  renderScActionsList();
+}
+
+function saveScheduledGoal() {
+  const title = document.getElementById('sc-title').value.trim();
+  if (!title) { showToast('Please enter a title'); return; }
+  const firstDue = document.getElementById('sc-first').value;
+  if (!firstDue) { showToast('Please set a first due date'); return; }
+
+  const data = {
+    title,
+    category: document.getElementById('sc-category').value,
+    subgroup: document.getElementById('sc-subgroup')?.value || undefined,
+    interval: parseInt(document.getElementById('sc-interval').value) || 30,
+    unit: document.getElementById('sc-unit').value,
+    firstDue,
+    points: parseInt(document.getElementById('sc-points').value) || 5,
+    notes: document.getElementById('sc-notes').value.trim(),
+    actions: scActionsBuilder.map(a => ({ text: a.text, points: a.points })),
+    active: true,
+  };
+  if (!data.subgroup) delete data.subgroup;
+
+  if (editingScheduledId) {
+    const sc = state.scheduledGoals.find(x => x.id === editingScheduledId);
+    Object.assign(sc, data);
+  } else {
+    if (!state.scheduledGoals) state.scheduledGoals = [];
+    state.scheduledGoals.push({ id: state.nextScheduledId++, ...data });
+  }
+  saveState();
+  spawnScheduledInstances(); // immediately spawn if first due ≤ today
+  closeModal('scheduledModalOverlay');
+  renderMain();
+  showToast('✓ Schedule saved');
+}
+
+async function deleteScheduledGoal(id) {
+  const sc = state.scheduledGoals.find(x => x.id === id);
+  const ok = await appConfirm(
+    'Future instances won\'t be created. Existing spawned goals remain in your Goals list.',
+    `Stop scheduling "${sc.title}"?`, 'Stop'
+  );
+  if (!ok) return;
+  state.scheduledGoals = state.scheduledGoals.filter(x => x.id !== id);
+  saveState();
+  renderMain();
+  showToast('Schedule removed');
+}
+
+function toggleScheduledActive(id) {
+  const sc = state.scheduledGoals.find(x => x.id === id);
+  sc.active = !sc.active;
+  saveState();
+  renderMain();
+  showToast(sc.active ? 'Schedule resumed' : 'Schedule paused');
+}
+
+function renderScheduledPage() {
+  if (!state.scheduledGoals) state.scheduledGoals = [];
+  const today = todayKey();
+
+  let html = `<div class="heatmap-title" style="margin-bottom:4px">📅 Scheduled Goals</div>
+  <div class="heatmap-sub" style="margin-bottom:14px">
+    Goals that repeat automatically. Each instance only appears in your Goals list when its due date arrives.
+  </div>
+  <button class="btn btn-primary" style="width:100%;margin-bottom:18px" onclick="openScheduledModal()">+ New Scheduled Goal</button>`;
+
+  if (!state.scheduledGoals.length) {
+    html += `<div class="empty-state"><div class="icon">📅</div>
+      <p>No scheduled goals yet. Add one for anything that repeats — "Update portfolio every 45 days", "Pedicure every month", "Quarterly review every 90 days".<br><br>You can also tick <b>"🔄 Make this a recurring scheduled goal"</b> when creating or editing any regular goal.</p>
+    </div>`;
+    return html;
+  }
+
+  // Group by category
+  const byCat = {};
+  state.scheduledGoals.forEach(sc => {
+    const catId = sc.category || '_none';
+    if (!byCat[catId]) byCat[catId] = [];
+    byCat[catId].push(sc);
+  });
+
+  // Sort categories in the same order as state.categories, then uncategorized last
+  const catOrder = state.categories.map(c => c.id);
+  const sortedCatIds = [...catOrder.filter(id => byCat[id]), ...Object.keys(byCat).filter(id => !catOrder.includes(id))];
+
+  sortedCatIds.forEach(catId => {
+    const schedules = byCat[catId];
+    const cat = state.categories.find(c => c.id === catId);
+
+    // Category header — same style as goal category headers
+    html += `<div class="category-section">
+      <div class="category-head">
+        <div class="cat-dot" style="background:${cat ? `var(--c-${cat.color})` : 'var(--ink3)'}"></div>
+        <div class="cat-name">${cat ? escapeHtml(cat.name) : 'Uncategorised'}</div>
+        <div class="cat-count">${schedules.length} schedule${schedules.length!==1?'s':''}</div>
+      </div>`;
+
+    schedules.forEach(sc => {
+      const upcoming = upcomingDates(sc, 4);
+      const next = upcoming[0];
+      const diffDays = next ? Math.round((new Date(next) - new Date(today)) / 86400000) : null;
+
+      let nextCls = '', nextLabel = '';
+      if (diffDays === null) { nextLabel = 'No upcoming dates'; }
+      else if (diffDays < 0) { nextLabel = `${Math.abs(diffDays)}d overdue`; nextCls = 'overdue'; }
+      else if (diffDays === 0) { nextLabel = 'Due today'; nextCls = 'due'; }
+      else if (diffDays <= 7) { nextLabel = `Due in ${diffDays} days`; nextCls = 'soon'; }
+      else { nextLabel = `Next: ${new Date(next).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}`; }
+
+      const intervalLabel = `Every ${sc.interval} ${sc.unit}`;
+      const liveInstances = state.goals.filter(g => g.scheduledId === sc.id && !g.done);
+      const completedInstances = state.goalHistory.filter(g => g.scheduledId === sc.id);
+
+      // Subgroup label if set
+      const sg = cat && sc.subgroup ? cat.subgroups?.find(s => s.id === sc.subgroup) : null;
+
+      html += `<div class="scheduled-card">
+        <div class="scheduled-top">
+          <div class="scheduled-icon">${sc.active ? '🔄' : '⏸️'}</div>
+          <div class="scheduled-body">
+            <div class="scheduled-title">${escapeHtml(sc.title)}</div>
+            <div class="scheduled-meta">
+              ${intervalLabel}
+              ${sg ? `· <span style="opacity:0.7">${escapeHtml(sg.name)}</span>` : ''}
+              · +${sc.points}pts
+              ${sc.actions && sc.actions.length ? `· ${sc.actions.length} action${sc.actions.length!==1?'s':''}` : ''}
+              ${completedInstances.length ? `· ✓ ${completedInstances.length} done` : ''}
+            </div>
+            ${sc.active
+              ? `<div class="scheduled-next ${nextCls}">📍 ${nextLabel}</div>`
+              : '<div class="scheduled-meta" style="font-style:italic">Paused</div>'}
+          </div>
+          <div class="goal-actions">
+            <button onclick="openScheduledModal(${sc.id})" title="Edit">✎</button>
+            <button onclick="toggleScheduledActive(${sc.id})" title="${sc.active?'Pause':'Resume'}">${sc.active?'⏸':'▶'}</button>
+            <button class="del-btn" onclick="deleteScheduledGoal(${sc.id})" title="Remove">✕</button>
+          </div>
+        </div>`;
+
+      if (upcoming.length > 0 && sc.active) {
+        html += `<div class="scheduled-instances">`;
+        upcoming.slice(0, 4).forEach(d => {
+          const isActive = d <= today;
+          const dLabel = new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+          const spawned = state.goals.find(g => g.scheduledId === sc.id && g.scheduledDue === d);
+          const done = state.goalHistory.find(g => g.scheduledId === sc.id && g.scheduledDue === d);
+          html += `<div class="scheduled-instance-row ${isActive?'active':''}">
+            <span>${dLabel}</span>
+            <span>${done ? '✅ Done' : spawned ? '🔵 Active' : '⬜ Upcoming'}</span>
+          </div>`;
+        });
+        html += `</div>`;
+      }
+
+      if (liveInstances.length) {
+        html += `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--surface2);font-size:12px;color:var(--ink3)">
+          ${liveInstances.length} active instance${liveInstances.length!==1?'s':''} in Goals right now
+          <span style="cursor:pointer;color:var(--accent);margin-left:8px" onclick="setTab('${catId}')">→ View</span>
+        </div>`;
+      }
+
+      html += `</div>`; // end scheduled-card
+    });
+
+    html += `</div>`; // end category-section
+  });
+
+  return html;
+}
+
+function renderOverduePage() {
+  const today = todayKey();
+  const grouped = {};
+
+  state.goals.forEach(g => {
+    if (g.done) return;
+    const goalOverdue = g.deadline && g.deadline < today && (!g.actions || !g.actions.length);
+    const goalWithActionsOverdue = g.deadline && g.deadline < today && g.actions && g.actions.length;
+    const overdueActions = (g.actions||[]).filter(a => {
+      if (a.recurring && a.occurrences) return a.occurrences.some(o => o.date < today && !o.done);
+      return !a.done && a.deadline && a.deadline < today;
+    });
+    if (!goalOverdue && !goalWithActionsOverdue && !overdueActions.length) return;
+
+    if (!grouped[g.category]) {
+      const cat = state.categories.find(c => c.id === g.category);
+      grouped[g.category] = { cat, goals: [] };
+    }
+    grouped[g.category].goals.push({ goal: g, overdueActions, goalOverdue: goalOverdue || goalWithActionsOverdue });
+  });
+
+  const isEmpty = Object.keys(grouped).length === 0;
+  let html = `<div class="heatmap-title" style="margin-bottom:4px">⚠️ Overdue</div>
+  <div class="heatmap-sub" style="margin-bottom:14px">Everything here missed its deadline. Complete it, reschedule it, or discard it — but don't let it pile up silently.</div>`;
+
+  if (isEmpty) {
+    html += `<div class="empty-state"><div class="icon">🎉</div><p>Nothing overdue right now — great job staying on track!</p></div>`;
+    return html;
+  }
+
+  Object.values(grouped).forEach(({ cat, goals }) => {
+    html += `<div class="category-section">`;
+    if (cat) html += `<div class="category-head"><div class="cat-dot" style="background:var(--c-${cat.color})"></div><div class="cat-name" style="font-size:14px">${escapeHtml(cat.name)}</div></div>`;
+
+    goals.forEach(({ goal, overdueActions, goalOverdue }) => {
+      const rescheduleCount = goal.rescheduleCount || 0;
+      const dur = goal.deadline ? durationLabel(goal.deadline) : null;
+      const borderColor = rescheduleCount >= 3 ? 'var(--c-social)' : 'var(--danger)';
+
+      html += `<div style="background:var(--surface);border:1px solid ${borderColor};border-radius:var(--radius);padding:12px 14px;margin-bottom:8px">`;
+
+      // Reschedule warning
+      if (rescheduleCount >= 3) {
+        html += `<div style="font-size:11.5px;color:var(--c-social);font-weight:600;margin-bottom:6px;padding:6px 8px;background:var(--c-social-l);border-radius:6px">
+          ⚡ Rescheduled ${rescheduleCount}× — this keeps slipping. Worth sitting down to really re-date it or drop it.
+        </div>`;
+      }
+
+      html += `<div style="font-size:13.5px;font-weight:500;color:var(--ink);margin-bottom:8px">${escapeHtml(goal.title)}`;
+      if (dur) html += ` <span style="font-size:11px;color:var(--danger)">(${dur.text})</span>`;
+      html += `</div>`;
+
+      // Goal-level actions (no sub-actions)
+      if (goalOverdue && !overdueActions.length) {
+        html += `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <button class="btn btn-primary" style="font-size:12px;padding:6px 12px" onclick="toggleGoal(${goal.id})">✓ Complete</button>
+          <button class="btn btn-ghost" style="font-size:12px;padding:6px 10px" onclick="rescheduleGoal(${goal.id})">📅 Reschedule</button>
+          <button class="btn btn-ghost" style="font-size:12px;padding:6px 10px;color:var(--ink3)" onclick="discardOverdueGoal(${goal.id})">✕ Discard</button>
+        </div>`;
+      }
+
+      // Action-level overdue items
+      overdueActions.forEach(a => {
+        if (a.recurring && a.occurrences) {
+          const missedOccs = a.occurrences.filter(o => o.date < today && !o.done);
+          html += `<div style="margin-bottom:8px;padding:8px;background:var(--surface2);border-radius:8px">
+            <div style="font-size:13px;font-weight:500;margin-bottom:6px">${escapeHtml(a.text)}</div>
+            <div style="font-size:11.5px;color:var(--danger);margin-bottom:6px">${missedOccs.length} missed occurrence${missedOccs.length!==1?'s':''}</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button class="btn btn-ghost" style="font-size:11px;padding:5px 10px" onclick="discardMissedOccurrences(${goal.id},${a.id})">✕ Clear missed</button>
+            </div>
+          </div>`;
+        } else {
+          const aRescheduleCount = a.rescheduleCount || 0;
+          const aDur = durationLabel(a.deadline);
+          html += `<div style="margin-bottom:8px;padding:8px;background:var(--surface2);border-radius:8px">
+            ${aRescheduleCount >= 3 ? `<div style="font-size:11px;color:var(--c-social);font-weight:600;margin-bottom:4px">⚡ Rescheduled ${aRescheduleCount}× — worth reconsidering</div>` : ''}
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+              <div class="goal-check ${a.done?'checked':''}" style="width:20px;height:20px;flex-shrink:0" onclick="toggleAction(${goal.id},${a.id})"></div>
+              <div style="font-size:13px;flex:1">${escapeHtml(a.text)} <span style="color:var(--danger);font-size:11px">${aDur?aDur.text:''}</span></div>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button class="btn btn-ghost" style="font-size:11px;padding:5px 10px" onclick="rescheduleAction(${goal.id},${a.id})">📅 Reschedule</button>
+              <button class="btn btn-ghost" style="font-size:11px;padding:5px 10px;color:var(--ink3)" onclick="discardOverdueAction(${goal.id},${a.id})">✕ Discard</button>
+            </div>
+          </div>`;
+        }
+      });
+      html += `</div>`;
+    });
+    html += `</div>`;
+  });
+  return html;
+}
+
+// ── Reschedule / discard helpers ─────────────────────────────────
+function rescheduleGoal(goalId) {
+  const g = state.goals.find(x => x.id === goalId);
+  g.rescheduleCount = (g.rescheduleCount || 0) + 1;
+  saveState();
+  openGoalModal(goalId); // open edit modal so they can pick a new date
+}
+
+function discardOverdueGoal(goalId) {
+  appConfirm('This will remove the goal. It\'s logged as discarded in History so there\'s still a trace of it.', 'Discard goal?', 'Discard').then(ok => {
+    if (!ok) return;
+    const g = state.goals.find(x => x.id === goalId);
+    state.goalHistory.push({
+      ...g,
+      completedDate: todayKey(),
+      done: true,
+      discarded: true,
+      title: `[Discarded] ${g.title}`,
+    });
+    state.goals = state.goals.filter(x => x.id !== goalId);
+    saveState();
+    renderMain();
+    showToast('Discarded — logged in History');
+  });
+}
+
+function rescheduleAction(goalId, actionId) {
+  const g = state.goals.find(x => x.id === goalId);
+  const a = g.actions.find(x => x.id === actionId);
+  a.rescheduleCount = (a.rescheduleCount || 0) + 1;
+  saveState();
+  openActionEdit(goalId, actionId);
+}
+
+function discardOverdueAction(goalId, actionId) {
+  appConfirm('Remove this action? It\'s past its deadline and won\'t be recovered.', 'Discard action?', 'Discard').then(ok => {
+    if (!ok) return;
+    const g = state.goals.find(x => x.id === goalId);
+    g.actions = g.actions.filter(x => x.id !== actionId);
+    saveState();
+    renderMain();
+    showToast('Action discarded');
+  });
+}
+
+function discardMissedOccurrences(goalId, actionId) {
+  appConfirm('Mark all past missed occurrences as cleared? They won\'t count toward your progress.', 'Clear missed?', 'Clear').then(ok => {
+    if (!ok) return;
+    const g = state.goals.find(x => x.id === goalId);
+    const a = g.actions.find(x => x.id === actionId);
+    const today = todayKey();
+    a.occurrences.forEach(o => { if (o.date < today && !o.done) o.discarded = true; });
+    saveState();
+    renderMain();
+    showToast('Missed occurrences cleared');
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DAILY PAGE — merges morning check-in, evidence, evening reflection
+// (replaces separate Daily Check-in and Evidence Journal pages)
+// ═══════════════════════════════════════════════════════════════════
+function renderDailyPage() {
+  const today = todayKey();
+  if (!state.dailyCheckins[today]) state.dailyCheckins[today] = { morning: '', evening: '' };
+  const c = state.dailyCheckins[today];
+
+  let html = `<div class="heatmap-title" style="margin-bottom:4px">📝 Daily</div>
+  <div class="heatmap-sub" style="margin-bottom:14px">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}</div>`;
+
+  html += `<div class="week-prompt-card">
+    <div class="week-prompt-q">🌅 Morning intention</div>
+    <div style="font-size:12px;color:var(--ink3);margin-bottom:6px">What's one thing you can do today to move closer to your future?</div>
+    <textarea class="checkin-textarea" id="checkin-morning" placeholder="Write here...">${escapeHtml(c.morning||'')}</textarea>
+  </div>`;
+
+  html += `<div class="week-prompt-card">
+    <div class="week-prompt-q">✨ Evidence</div>
+    <div style="font-size:12px;color:var(--ink3);margin-bottom:6px">One thing today that proves you're becoming the person you said you'd be:</div>
+    <textarea class="checkin-textarea" id="daily-evidence" placeholder="Write here..."></textarea>
+  </div>`;
+
+  html += `<div class="week-prompt-card">
+    <div class="week-prompt-q">🌙 Evening reflection</div>
+    <div style="font-size:12px;color:var(--ink3);margin-bottom:6px">What did you do today that moved you forward?</div>
+    <textarea class="checkin-textarea" id="checkin-evening" placeholder="Write here...">${escapeHtml(c.evening||'')}</textarea>
+  </div>`;
+
+  html += `<button class="btn btn-primary" style="width:100%;margin-bottom:14px" onclick="saveDailyPage()">Save Today's Entry</button>`;
+
+  html += renderCheckinInsights();
+
+  // Past entries
+  const pastDates = Object.keys(state.dailyCheckins).filter(d => d !== today && (state.dailyCheckins[d].morning || state.dailyCheckins[d].evening)).sort().reverse();
+  if (pastDates.length) {
+    html += `<div class="heatmap-title" style="margin-bottom:10px">Previous Days</div>`;
+    pastDates.slice(0, 14).forEach(d => {
+      const entry = state.dailyCheckins[d];
+      const followed = checkinFollowedThrough(entry);
+      const label = new Date(d).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
+      html += `<div class="evidence-entry">
+        <div class="evidence-entry-date">${label} ${followed !== null ? (followed ? '<span style="color:var(--done)">✓ followed through</span>' : '<span style="color:var(--ink3)">— different path</span>') : ''}</div>
+        ${entry.morning ? `<div class="evidence-entry-text" style="margin-bottom:3px"><b>Morning:</b> ${escapeHtml(entry.morning)}</div>` : ''}
+        ${entry.evening ? `<div class="evidence-entry-text"><b>Evening:</b> ${escapeHtml(entry.evening)}</div>` : ''}
+      </div>`;
+    });
+  }
+  return html;
+}
+
+function saveDailyPage() {
+  const today = todayKey();
+  if (!state.dailyCheckins[today]) state.dailyCheckins[today] = {};
+  state.dailyCheckins[today].morning = document.getElementById('checkin-morning').value;
+  state.dailyCheckins[today].evening = document.getElementById('checkin-evening').value;
+
+  const evidenceText = document.getElementById('daily-evidence').value.trim();
+  if (evidenceText) {
+    state.evidenceJournal.push({ id: state.nextEvidenceId++, uid: newUID(), text: evidenceText, date: new Date().toISOString() });
+  }
+  logActivity(today, 1);
+  saveState();
+  renderMain();
+  showToast('✓ Daily entry saved');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// AFFIRMATIONS PAGE
+// ═══════════════════════════════════════════════════════════════════
+function renderAffirmationsPage() {
+  let html = `<div class="heatmap-title" style="margin-bottom:4px">💬 Affirmations</div>
+  <div class="heatmap-sub" style="margin-bottom:14px">One of these is shown at random each time you open the app. Edit, add, or remove them here.</div>`;
+
+  html += `<div class="quick-add-action" style="margin-bottom:16px">
+    <input class="quick-add-input" id="affirmInput" placeholder="Add an affirmation..." style="flex:1 1 100%">
+    <div class="quick-add-row2">
+      <button class="quick-add-save" style="width:auto;padding:0 16px;flex:1" onclick="addAffirmation()">+ Add</button>
+    </div>
+  </div>`;
+
+  if (!state.affirmations.length) {
+    html += `<div class="empty-state"><div class="icon">💬</div><p>No affirmations yet — add one above.</p></div>`;
+  } else {
+    state.affirmations.forEach((a, idx) => {
+      html += `<div class="evidence-entry" style="display:flex;align-items:center;gap:10px">
+        <div class="evidence-entry-text" style="flex:1;font-style:italic">"${escapeHtml(a)}"</div>
+        <button class="del-btn" onclick="deleteAffirmation(${idx})" title="Remove">✕</button>
+      </div>`;
+    });
+  }
+  return html;
+}
+
+function addAffirmation() {
+  const input = document.getElementById('affirmInput');
+  const text = input.value.trim();
+  if (!text) return;
+  state.affirmations.push(text);
+  saveState();
+  renderMain();
+  showToast('✓ Affirmation added');
+}
+
+async function deleteAffirmation(idx) {
+  const ok = await appConfirm(`Remove this affirmation?`, 'Delete', 'Remove');
+  if (!ok) return;
+  state.affirmations.splice(idx, 1);
+  saveState();
+  renderMain();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// AFFIRMATION POPUP — shown once per day on app open
+// ═══════════════════════════════════════════════════════════════════
+function maybeShowAffirmation() {
+  if (!state.affirmations.length) return;
+  const today = todayKey();
+  if (state.affirmationLastShown === today) return; // already shown today
+  const idx = Math.floor(Math.random() * state.affirmations.length);
+  document.getElementById('affirmationText').textContent = `"${state.affirmations[idx]}"`;
+  document.getElementById('affirmationOverlay').classList.add('show');
+  state.affirmationLastShown = today;
+  saveState();
+}
+
+function closeAffirmation() {
+  document.getElementById('affirmationOverlay').classList.remove('show');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DAILY RESPONSIBILITY CHECK-IN — kept for backward compatibility
+// (routes to merged Daily page)
+// ═══════════════════════════════════════════════════════════════════
+function renderCheckinPage() { return renderDailyPage(); }
+function saveCheckin() { saveDailyPage(); }
+
+// Very simple heuristic: do morning intention and evening report share a meaningful word?
+function checkinFollowedThrough(entry) {
+  if (!entry.morning || !entry.evening) return null;
+  const stop = new Set(['the','a','an','to','of','and','for','on','in','my','i','will','today','do','that','this','with','was','be','it','at']);
+  const wordsOf = s => s.toLowerCase().match(/[a-z]{4,}/g)?.filter(w => !stop.has(w)) || [];
+  const m = new Set(wordsOf(entry.morning));
+  const e = wordsOf(entry.evening);
+  return e.some(w => m.has(w));
+}
+
+function renderCheckinInsights() {
+  const dates = Object.keys(state.dailyCheckins).filter(d => state.dailyCheckins[d].morning || state.dailyCheckins[d].evening);
+  if (dates.length < 2) return '';
+
+  const withBoth = dates.filter(d => state.dailyCheckins[d].morning && state.dailyCheckins[d].evening);
+  const followed = withBoth.filter(d => checkinFollowedThrough(state.dailyCheckins[d]));
+  const pct = withBoth.length ? Math.round((followed.length / withBoth.length) * 100) : 0;
+
+  // Word frequency across morning intentions — what keeps coming up
+  const stop = new Set(['the','a','an','to','of','and','for','on','in','my','i','will','today','do','that','this','with','was','be','it','at','can','one','thing']);
+  const freq = {};
+  dates.forEach(d => {
+    const text = (state.dailyCheckins[d].morning||'') + ' ' + (state.dailyCheckins[d].evening||'');
+    (text.toLowerCase().match(/[a-z]{4,}/g)||[]).forEach(w => {
+      if (!stop.has(w)) freq[w] = (freq[w]||0) + 1;
+    });
+  });
+  const topWords = Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,5).filter(([,c])=>c>1);
+
+  let html = `<div class="ask-claude-panel" style="margin-bottom:0">
+    <div class="ask-claude-title">📊 What This Data Shows</div>
+    <div class="dash-summary-row" style="margin-bottom:12px">
+      <div class="dash-stat-card"><div class="dash-stat-val">${dates.length}</div><div class="dash-stat-label">Check-ins logged</div></div>
+      <div class="dash-stat-card"><div class="dash-stat-val">${pct}%</div><div class="dash-stat-label">Followed through</div></div>
+    </div>`;
+  if (topWords.length) {
+    html += `<div class="ask-claude-desc"><b>You keep mentioning:</b> ${topWords.map(([w,c]) => `${w} (${c}×)`).join(', ')}. That's worth noticing — it might point to what actually matters to you right now, or what's nagging at you.</div>`;
+  } else {
+    html += `<div class="ask-claude-desc">Keep logging — after a couple weeks, patterns in what you say each day will surface here.</div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// FUTURE SELF COACH — structured accountability conversation
+// ═══════════════════════════════════════════════════════════════════
+function buildCoachMessage() {
+  const db = state.destinyBlueprint;
+  const overdueGoals = state.goals.filter(g => !g.done && g.deadline && new Date(g.deadline) < new Date(new Date().toDateString()));
+  const overdueActions = [];
+  state.goals.forEach(g => (g.actions||[]).forEach(a => {
+    if (!a.recurring && !a.done && a.deadline && new Date(a.deadline) < new Date(new Date().toDateString())) overdueActions.push({g,a});
+  }));
+  const today = todayKey();
+  const todayCount = state.dailyLog[today] || 0;
+
+  const year = new Date().getFullYear();
+  const futureYear = year + 4; // a "future self" ~4 years out, matches your 4-yr house horizon
+
+  const hasBlueprint = db.statement || db.sixMonth || db.oneYear || db.fiveYear || db.tenYear;
+
+  // Pick the most relevant horizon to quote: prefer 1-year, fall back through others, then vision statement
+  function pickHorizon() {
+    if (db.oneYear) return { label: 'a year from now', text: db.oneYear };
+    if (db.sixMonth) return { label: '6 months from now', text: db.sixMonth };
+    if (db.fiveYear) return { label: '5 years from now', text: db.fiveYear };
+    if (db.tenYear) return { label: '10 years from now', text: db.tenYear };
+    if (db.statement) return { label: 'who you said you\'re becoming', text: db.statement };
+    return null;
+  }
+  const horizon = pickHorizon();
+
+  if (overdueGoals.length || overdueActions.length) {
+    const example = overdueGoals[0] ? overdueGoals[0].title : (overdueActions[0] ? overdueActions[0].a.text : '');
+    const cat = overdueGoals[0] ? state.categories.find(c => c.id === overdueGoals[0].category) : null;
+    if (horizon) {
+      return `You told me ${horizon.label} looks like: "${horizon.text.slice(0,90)}${horizon.text.length>90?'…':''}" So why did "${example}"${cat?` (${cat.name})`:''} slip past its deadline? What's actually in the way — and what's the smallest next step you can take today?`;
+    }
+    return `Why did "${example}" slip past its deadline? What's really in the way — and what's the smallest next step you can take today?`;
+  }
+
+  if (todayCount === 0) {
+    if (horizon) {
+      return `It's ${new Date().toLocaleDateString('en-GB',{weekday:'long'})} and nothing's logged yet. You said ${horizon.label} you'd be living: "${horizon.text.slice(0,90)}${horizon.text.length>90?'…':''}" — what's one true step today that actually moves you there?`;
+    }
+    return `It's ${new Date().toLocaleDateString('en-GB',{weekday:'long'})} and nothing's logged yet today. I'm not asking you to do everything — just one true step toward who you're becoming. What will it be? Tip: fill in your Destiny Blueprint so I can speak more specifically to you.`;
+  }
+
+  if (horizon) {
+    return `I see you showing up today — ${todayCount} action${todayCount!==1?'s':''} logged. That's the person who actually gets to ${horizon.label.replace('a year from now','live a year from now as')}: "${horizon.text.slice(0,80)}${horizon.text.length>80?'…':''}" Keep going. What's the next thing you're avoiding that you know you should do?`;
+  }
+  return `I see you showing up today — ${todayCount} action${todayCount!==1?'s':''} logged. That's the person you said you wanted to become, in Future Me (${futureYear}). Keep going. What's the next thing you're avoiding that you know you should do?`;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// WEEKLY REVIEW — pulls real data from the past 7 days + reflection prompts
+// ═══════════════════════════════════════════════════════════════════
+function getWeekRange(offsetWeeks = 0) {
+  const today = new Date(new Date().toDateString());
+  const dow = today.getDay(); // 0 = Sunday
+  const start = new Date(today);
+  start.setDate(start.getDate() - dow - (offsetWeeks * 7));
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  return { start, end };
+}
+
+function renderWeeklyReviewPage() {
+  const { start, end } = getWeekRange(0);
+  const startKey = dateKey(start), endKey = dateKey(end);
+
+  // Gather real data for this week
+  const completedThisWeek = state.goalHistory.filter(g => g.completedDate >= startKey && g.completedDate <= endKey);
+  const ptsThisWeek = completedThisWeek.reduce((s,g) => s + goalPoints(g), 0);
+  let actionsThisWeek = 0;
+  Object.keys(state.dailyLog).forEach(k => { if (k >= startKey && k <= endKey) actionsThisWeek += state.dailyLog[k]; });
+  const checkinsThisWeek = Object.keys(state.dailyCheckins).filter(k => k >= startKey && k <= endKey && (state.dailyCheckins[k].morning || state.dailyCheckins[k].evening)).length;
+  const journalThisWeek = state.evidenceJournal.filter(e => dateKey(new Date(e.date)) >= startKey && dateKey(new Date(e.date)) <= endKey).length;
+  const overdueNow = state.goals.filter(g => !g.done && g.deadline && g.deadline < todayKey()).length;
+
+  const rangeLabel = `${start.toLocaleDateString('en-GB',{day:'numeric',month:'short'})} – ${end.toLocaleDateString('en-GB',{day:'numeric',month:'short'})}`;
+
+  let html = `<div class="week-range-label">This Week · ${rangeLabel}</div>
+  <div class="heatmap-sub" style="margin-bottom:14px">A weekly checkpoint, not a report card — just an honest look at what actually happened.</div>`;
+
+  html += `<div class="week-stat-grid">
+    <div class="dash-stat-card"><div class="dash-stat-val">${completedThisWeek.length}</div><div class="dash-stat-label">Goals Completed</div></div>
+    <div class="dash-stat-card"><div class="dash-stat-val">${ptsThisWeek}</div><div class="dash-stat-label">Points Earned</div></div>
+    <div class="dash-stat-card"><div class="dash-stat-val">${actionsThisWeek}</div><div class="dash-stat-label">Actions Done</div></div>
+    <div class="dash-stat-card"><div class="dash-stat-val">${checkinsThisWeek}</div><div class="dash-stat-label">Check-ins</div></div>
+  </div>`;
+
+  if (overdueNow > 0) {
+    html += `<div class="ask-claude-panel" style="margin-bottom:16px">
+      <div class="ask-claude-desc">⚠️ You have <b>${overdueNow}</b> goal${overdueNow!==1?'s':''} currently overdue. Worth a look before the week resets.</div>
+    </div>`;
+  }
+
+  if (completedThisWeek.length) {
+    html += `<div class="heatmap-title" style="margin-bottom:8px">What got done</div>`;
+    completedThisWeek.forEach(g => {
+      html += `<div class="history-action-item">✅ ${escapeHtml(g.title)} <span style="color:var(--ink3)">(+${goalPoints(g)}pts)</span></div>`;
+    });
+  }
+
+  // Reflection prompts — saved per week
+  const existingReview = state.weeklyReviews.find(r => r.weekStart === startKey);
+  html += `<div class="week-prompt-card">
+    <div class="week-prompt-q">What's the biggest win this week, even a small one?</div>
+    <textarea class="checkin-textarea" id="wr-win" placeholder="Write here...">${escapeHtml(existingReview?.win || '')}</textarea>
+  </div>
+  <div class="week-prompt-card">
+    <div class="week-prompt-q">What kept slipping or felt hardest?</div>
+    <textarea class="checkin-textarea" id="wr-hard" placeholder="Write here...">${escapeHtml(existingReview?.hard || '')}</textarea>
+  </div>
+  <div class="week-prompt-card">
+    <div class="week-prompt-q">One thing to do differently next week?</div>
+    <textarea class="checkin-textarea" id="wr-change" placeholder="Write here...">${escapeHtml(existingReview?.change || '')}</textarea>
+  </div>`;
+
+  html += `<button class="btn btn-primary" style="width:100%;margin-bottom:18px" onclick="saveWeeklyReview('${startKey}','${endKey}')">Save This Week's Review (+5pts)</button>`;
+
+  if (existingReview) {
+    html += `<div class="ask-claude-panel" style="margin-bottom:14px;border-left:3px solid var(--done)"><div class="ask-claude-desc" style="color:var(--done)">✓ This week's review is saved. Edit above and save again to update it.</div></div>`;
+  }
+
+  const allReviews = [...state.weeklyReviews].sort((a,b) => b.weekStart.localeCompare(a.weekStart));
+  if (allReviews.length) {
+    html += `<div class="heatmap-title" style="margin-bottom:10px">Saved Reviews (${allReviews.length})</div>`;
+    allReviews.forEach(r => {
+      const isCurrent = r.weekStart === startKey;
+      html += `<div class="week-review-entry" ${isCurrent ? 'style="border-color:var(--accent)"' : ''}>
+        <div class="week-review-date">${isCurrent ? '📍 This week · ' : ''}${new Date(r.weekStart).toLocaleDateString('en-GB',{day:'numeric',month:'short'})} – ${new Date(r.weekEnd).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})} · ${r.completedCount} goals, ${r.pointsEarned}pts</div>
+        ${r.win ? `<div class="evidence-entry-text" style="margin-bottom:4px"><b>Win:</b> ${escapeHtml(r.win)}</div>` : ''}
+        ${r.hard ? `<div class="evidence-entry-text" style="margin-bottom:4px"><b>Hard:</b> ${escapeHtml(r.hard)}</div>` : ''}
+        ${r.change ? `<div class="evidence-entry-text"><b>Next time:</b> ${escapeHtml(r.change)}</div>` : ''}
+      </div>`;
+    });
+  }
+
+  return html;
+}
+
+function saveWeeklyReview(startKey, endKey) {
+  const completedThisWeek = state.goalHistory.filter(g => g.completedDate >= startKey && g.completedDate <= endKey);
+  const ptsThisWeek = completedThisWeek.reduce((s,g) => s + goalPoints(g), 0);
+  const isNew = !state.weeklyReviews.find(r => r.weekStart === startKey);
+  const data = {
+    weekStart: startKey,
+    weekEnd: endKey,
+    completedCount: completedThisWeek.length,
+    pointsEarned: ptsThisWeek,
+    win: document.getElementById('wr-win').value.trim(),
+    hard: document.getElementById('wr-hard').value.trim(),
+    change: document.getElementById('wr-change').value.trim(),
+    savedDate: new Date().toISOString(),
+  };
+  const existingIdx = state.weeklyReviews.findIndex(r => r.weekStart === startKey);
+  if (existingIdx >= 0) state.weeklyReviews[existingIdx] = data;
+  else state.weeklyReviews.push(data);
+
+  // Award 5pts for completing a weekly review (only on first save of this week, not on edits)
+  if (isNew) {
+    logActivity(todayKey(), 1);
+    state.redeemedLog; // no-op, just using the pattern
+    // We credit earned pts directly — hackily push a synthetic log entry for balance()
+    // Actually simpler: add a virtual "Weekly Review" goal-completion credit
+    state.goalHistory.push({
+      id: state.nextGoalId++, uid: newUID(),
+      title: '📆 Weekly Review completed',
+      category: state.categories[0].id,
+      deadline: startKey, completedDate: todayKey(),
+      points: 5, done: true, actions: [], isWeeklyReviewReward: true
+    });
+    showToast('✓ Weekly review saved — +5pts earned!');
+  } else {
+    showToast('✓ Weekly review updated');
+  }
+  saveState();
+  renderMain();
+}
+
+function renderCoachPage() {
+  const msg = buildCoachMessage();
+  const futureYear = new Date().getFullYear() + 4;
+  let html = `<div class="ask-claude-panel" style="margin-bottom:14px">
+    <div class="ask-claude-title">🔮 Future Self Coach</div>
+    <div class="ask-claude-desc">A structured nudge from the future you, built from your actual deadlines and activity — not a live chat, but real accountability based on real data. For an open-ended conversation, use "Ask Claude" instead.</div>
+  </div>`;
+
+  html += `<div class="coach-message">
+    <div class="coach-from">Future Me (${futureYear})</div>
+    <div class="coach-text">"${escapeHtml(msg)}"</div>
+  </div>`;
+
+  html += `<div class="vision-q" style="margin-bottom:6px">Your response</div>
+  <textarea class="coach-reply-textarea" id="coachReply" placeholder="Be honest with yourself..."></textarea>
+  <button class="btn btn-primary" style="width:100%;margin-bottom:18px" onclick="saveCoachReply()">Log My Response</button>`;
+
+  const replies = state.evidenceJournal.filter(e => e.isCoachReply);
+  if (replies.length) {
+    html += `<div class="heatmap-title" style="margin-bottom:10px">Past Responses to Future You</div>`;
+    [...replies].reverse().slice(0,10).forEach(e => {
+      const label = new Date(e.date).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+      html += `<div class="evidence-entry"><div class="evidence-entry-date">${label}</div><div class="evidence-entry-text">${escapeHtml(e.text)}</div></div>`;
+    });
+  }
+  return html;
+}
+
+function saveCoachReply() {
+  const text = document.getElementById('coachReply').value.trim();
+  if (!text) { showToast('Write a response first'); return; }
+  state.evidenceJournal.push({ id: state.nextEvidenceId++, uid: newUID(), text, date: new Date().toISOString(), isCoachReply: true });
+  saveState();
+  renderMain();
+  showToast('✓ Logged — your future self is listening');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DECISION COMPASS — score a decision against 3 guiding questions
+// ═══════════════════════════════════════════════════════════════════
+let compassAnswers = { future: null, values: null, regret: null };
+let compassDecisionText = '';
+
+function renderDecisionCompassPage() {
+  let html = `<div class="ask-claude-panel" style="margin-bottom:14px">
+    <div class="ask-claude-title">🧭 Decision Compass</div>
+    <div class="ask-claude-desc">Before a big decision, answer honestly. This won't tell you what to do — it just reflects back how aligned the choice feels, so the answer that was already forming in you gets clearer.</div>
+  </div>`;
+
+  html += `<div class="field-label">What decision are you weighing?</div>
+  <input class="field-input" id="cm-decision" placeholder="e.g. Take the contractor job vs hold out for civilian role" style="margin-bottom:16px" value="${escapeHtml(compassDecisionText)}" oninput="compassDecisionText=this.value">`;
+
+  const questions = [
+    { key: 'future', text: 'Does this move me toward the future I described in my Destiny Blueprint?' },
+    { key: 'values', text: 'Does this align with what actually matters to me — faith, family, integrity?' },
+    { key: 'regret', text: 'If I said no to this, would I regret it a year from now?' },
+  ];
+
+  questions.forEach(q => {
+    html += `<div class="compass-q-card">
+      <div class="compass-q-text">${q.text}</div>
+      <div class="compass-scale" id="cm-scale-${q.key}">
+        ${[1,2,3,4,5].map(n => `<div class="compass-scale-btn ${compassAnswers[q.key]===n?'selected':''}" onclick="setCompassAnswer('${q.key}',${n})">${n}</div>`).join('')}
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--ink3);margin-top:4px"><span>Not at all</span><span>Completely</span></div>
+    </div>`;
+  });
+
+  const allAnswered = questions.every(q => compassAnswers[q.key] !== null);
+  html += `<button class="btn btn-primary" style="width:100%;margin:8px 0 18px" ${allAnswered?'':'disabled'} onclick="scoreDecision()">See My Compass Reading</button>`;
+
+  if (state.decisionLog.length) {
+    html += `<div class="heatmap-title" style="margin-bottom:10px">Past Decisions</div>`;
+    [...state.decisionLog].reverse().slice(0,10).forEach(d => {
+      const label = new Date(d.date).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+      html += `<div class="decision-log-entry">
+        <div style="font-size:13px;font-weight:500;margin-bottom:4px">${escapeHtml(d.decision)}</div>
+        <div style="font-size:11.5px;color:var(--ink3)">${label} · Compass score: ${d.score}%</div>
+      </div>`;
+    });
+  }
+
+  return html;
+}
+
+function setCompassAnswer(key, val) {
+  compassAnswers[key] = val;
+  renderMain();
+}
+
+function scoreDecision() {
+  const decision = (compassDecisionText || document.getElementById('cm-decision').value).trim();
+  if (!decision) { showToast('Describe the decision first'); return; }
+  const vals = Object.values(compassAnswers);
+  const score = Math.round((vals.reduce((s,v)=>s+v,0) / (vals.length * 5)) * 100);
+
+  let label = '';
+  if (score >= 80) label = 'This feels strongly aligned with who you\'re becoming.';
+  else if (score >= 60) label = 'Leaning aligned, but worth sitting with a little longer.';
+  else if (score >= 40) label = 'Mixed signals — this might not be the moment, or not the right form of it.';
+  else label = 'This pulls you away from what you said matters. Worth a closer look at why you\'re considering it.';
+
+  state.decisionLog.push({ id: state.nextDecisionId++, decision, score, answers: {...compassAnswers}, date: new Date().toISOString() });
+  saveState();
+
+  document.getElementById('completionEmoji').textContent = '🧭';
+  document.getElementById('completionTitle').textContent = `${score}%  aligned`;
+  document.getElementById('completionSub').textContent = decision;
+  document.getElementById('completionList').innerHTML = `<div class="completion-list-item">${label}</div>`;
+  document.getElementById('completionPts').textContent = '';
+  document.getElementById('completionOverlay').classList.add('show');
+
+  compassAnswers = { future: null, values: null, regret: null };
+  compassDecisionText = '';
+  renderMain();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PERSONAL SUCCESS FORMULA — surfaces real patterns from your own data
+// ═══════════════════════════════════════════════════════════════════
+function renderSuccessFormulaPage() {
+  let html = `<div class="ask-claude-panel" style="margin-bottom:14px">
+    <div class="ask-claude-title">📈 Personal Success Formula</div>
+    <div class="ask-claude-desc">Not generic productivity advice — patterns pulled from your own logged activity. The more you use the app, the sharper this gets.</div>
+  </div>`;
+
+  const loggedDays = Object.keys(state.dailyLog).filter(k => state.dailyLog[k] > 0);
+  if (loggedDays.length < 7) {
+    html += `<div class="empty-state"><div class="icon">📈</div><p>Keep logging activity — after about a week of data, real patterns will start showing up here (best days, check-in correlation, momentum trends).</p></div>`;
+    return html;
+  }
+
+  // Which day of week tends to have the most activity
+  const dayTotals = [0,0,0,0,0,0,0]; // Sun-Sat
+  const dayCounts = [0,0,0,0,0,0,0];
+  loggedDays.forEach(k => {
+    const dow = new Date(k).getDay();
+    dayTotals[dow] += state.dailyLog[k];
+    dayCounts[dow]++;
+  });
+  const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const dayAverages = dayTotals.map((t,i) => dayCounts[i] ? t/dayCounts[i] : 0);
+  const bestDayIdx = dayAverages.indexOf(Math.max(...dayAverages));
+  const worstDayIdx = dayAverages.reduce((minI,v,i,arr) => (dayCounts[i] && v < arr[minI] ? i : minI), dayCounts.findIndex(c=>c>0));
+
+  // Check-in correlation: do days with a morning check-in have more actions completed?
+  const daysWithCheckin = Object.keys(state.dailyCheckins).filter(k => state.dailyCheckins[k].morning);
+  const avgWithCheckin = daysWithCheckin.length ? daysWithCheckin.reduce((s,k)=>s+(state.dailyLog[k]||0),0) / daysWithCheckin.length : 0;
+  const daysWithoutCheckin = loggedDays.filter(k => !state.dailyCheckins[k] || !state.dailyCheckins[k].morning);
+  const avgWithoutCheckin = daysWithoutCheckin.length ? daysWithoutCheckin.reduce((s,k)=>s+(state.dailyLog[k]||0),0) / daysWithoutCheckin.length : 0;
+
+  html += `<div class="formula-insight-card">
+    <div class="formula-insight-text">📅 Your most productive day tends to be <b>${dayNames[bestDayIdx]}</b>, averaging ${dayAverages[bestDayIdx].toFixed(1)} actions. ${dayCounts[worstDayIdx] ? `<b>${dayNames[worstDayIdx]}</b> tends to be quieter, averaging ${dayAverages[worstDayIdx].toFixed(1)}.` : ''}</div>
+  </div>`;
+
+  if (daysWithCheckin.length >= 3 && avgWithCheckin > 0) {
+    const multiplier = avgWithoutCheckin > 0 ? (avgWithCheckin / avgWithoutCheckin).toFixed(1) : '—';
+    html += `<div class="formula-insight-card">
+      <div class="formula-insight-text">✅ On days you do a morning check-in, you complete <b>${avgWithCheckin.toFixed(1)} actions on average</b> vs <b>${avgWithoutCheckin.toFixed(1)}</b> without one${multiplier!=='—' ? ` — roughly <b>${multiplier}×</b> more` : ''}. The check-in itself seems to matter.</div>
+    </div>`;
+  }
+
+  html += `<div class="heatmap-title" style="margin:16px 0 10px">Activity by Day of Week</div>`;
+  const maxAvg = Math.max(...dayAverages, 1);
+  dayNames.forEach((name, i) => {
+    if (!dayCounts[i]) return;
+    html += `<div class="formula-stat-bar-row">
+      <div class="formula-stat-bar-label"><span>${name}</span><span>${dayAverages[i].toFixed(1)} avg</span></div>
+      <div class="formula-stat-bar-bg"><div class="formula-stat-bar-fill" style="width:${(dayAverages[i]/maxAvg)*100}%"></div></div>
+    </div>`;
+  });
+
+  return html;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// LEGACY DASHBOARD — reframes stats as life-impact, not task-completion
+// ═══════════════════════════════════════════════════════════════════
+function renderLegacyDashboardPage() {
+  const totalGoals = state.goalHistory.length;
+  const totalActions = Object.values(state.dailyLog).reduce((s,v)=>s+v,0);
+  const totalReflections = state.evidenceJournal.length + Object.keys(state.dailyCheckins).filter(k=>state.dailyCheckins[k].morning||state.dailyCheckins[k].evening).length;
+  const daysActive = Object.keys(state.dailyLog).filter(k=>state.dailyLog[k]>0).length;
+  const firstDate = state.firstInstalledDate ? new Date(state.firstInstalledDate) : new Date();
+  const monthsInvested = Math.max(1, Math.round((new Date() - firstDate) / (1000*60*60*24*30)));
+
+  // Skills/areas touched — distinct categories with at least one completed goal
+  const categoriesWithProgress = new Set(state.goalHistory.map(g=>g.category));
+  const habitsBuit = state.goals.concat(state.goalHistory).reduce((s,g)=>s+(g.actions||[]).filter(a=>a.recurring).length,0)
+    + state.goalHistory.reduce((s,g)=>s+(g.actions||[]).filter(a=>a.recurring).length,0);
+
+  let html = `<div class="legacy-hero">
+    <div style="font-size:32px;margin-bottom:8px">${state.destinyBlueprint.avatarEmoji || '🌳'}</div>
+    <div class="legacy-hero-title">The Life You're Building</div>
+    <div class="legacy-hero-sub">${state.destinyBlueprint.statement ? escapeHtml(state.destinyBlueprint.statement) : "Not a list of finished tasks — a record of who you've been becoming."}</div>
+  </div>`;
+
+  html += `<div class="legacy-stat-grid">
+    <div class="legacy-stat-card"><div class="legacy-stat-val">${totalGoals}</div><div class="legacy-stat-label">Goals Achieved</div></div>
+    <div class="legacy-stat-card"><div class="legacy-stat-val">${categoriesWithProgress.size}/${state.categories.length}</div><div class="legacy-stat-label">Life Areas Touched</div></div>
+    <div class="legacy-stat-card"><div class="legacy-stat-val">${totalReflections}</div><div class="legacy-stat-label">Moments of Reflection</div></div>
+    <div class="legacy-stat-card"><div class="legacy-stat-val">${daysActive}</div><div class="legacy-stat-label">Days You Showed Up</div></div>
+  </div>`;
+
+  html += `<div class="ask-claude-panel">
+    <div class="ask-claude-desc">In roughly <b>${monthsInvested} month${monthsInvested!==1?'s':''}</b> of using this, you've logged <b>${totalActions} actions</b> of real movement, built or attempted <b>${habitsBuit} habit${habitsBuit!==1?'s':''}</b>, and shown up across <b>${categoriesWithProgress.size}</b> different areas of your life. None of this is about how much got crossed off — it's evidence, the kind Take Charge of Your Destiny talks about, that you're someone who follows through.</div>
+  </div>`;
+
+  if (state.blueprintHistory.length) {
+    html += `<div class="ask-claude-panel">
+      <div class="ask-claude-title">🧭 ${state.blueprintHistory.length} Season${state.blueprintHistory.length!==1?'s':''} of Vision Saved</div>
+      <div class="ask-claude-desc">Your sense of where you're going has been deliberate enough to capture and revisit. Check Destiny Blueprint to see how it's evolved.</div>
+    </div>`;
+  }
+
+  return html;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// FUTURE / SOMEDAY GOALS
+// ═══════════════════════════════════════════════════════════════════
+function renderFuturePage() {
+  let html = `<div class="ask-claude-panel" style="margin-bottom:14px">
+    <div class="ask-claude-title">🔭 Someday Goals</div>
+    <div class="ask-claude-desc">Big dreams that aren't active yet — house, car, travel, whatever's on the horizon. Park them here guilt-free. Tap <b>Begin</b> whenever you're ready to actually start working on one.</div>
+  </div>`;
+  html += `<div style="display:flex;justify-content:flex-end;margin-bottom:10px"><div class="cat-add-btn" onclick="openFutureModal()">+ Add Someday Goal</div></div>`;
+
+  if (!state.futureGoals.length) {
+    html += `<div class="empty-state"><div class="icon">🔭</div><p>No someday goals yet.</p></div>`;
+  } else {
+    state.futureGoals.forEach(fg => {
+      html += `<div class="future-card">
+        <div class="future-icon">${fg.icon||'⭐'}</div>
+        <div class="future-body">
+          <div class="future-title">${escapeHtml(fg.title)}</div>
+          ${fg.note ? `<div class="future-note">${escapeHtml(fg.note)}</div>` : ''}
+        </div>
+        <button class="begin-btn" onclick="openBeginGoalModal(${fg.id})">Begin →</button>
+        <div class="goal-actions">
+          <button onclick="openFutureModal(${fg.id})" title="Edit">✎</button>
+          <button class="del-btn" onclick="deleteFutureGoal(${fg.id})" title="Delete">✕</button>
+        </div>
+      </div>`;
+    });
+  }
+  return html;
+}
+
+let editingFutureId = null;
+function openFutureModal(id = null) {
+  editingFutureId = id;
+  if (id) {
+    const fg = state.futureGoals.find(x => x.id === id);
+    document.getElementById('futureModalTitle').textContent = 'Edit Someday Goal';
+    document.getElementById('fg-title').value = fg.title;
+    document.getElementById('fg-icon').value = fg.icon || '';
+    document.getElementById('fg-note').value = fg.note || '';
+  } else {
+    document.getElementById('futureModalTitle').textContent = 'Add Someday Goal';
+    document.getElementById('fg-title').value = '';
+    document.getElementById('fg-icon').value = '';
+    document.getElementById('fg-note').value = '';
+  }
+  document.getElementById('futureModalOverlay').classList.add('show');
+}
+
+function saveFutureGoal() {
+  const title = document.getElementById('fg-title').value.trim();
+  if (!title) { showToast('Please enter a title'); return; }
+  const data = { title, icon: document.getElementById('fg-icon').value.trim() || '⭐', note: document.getElementById('fg-note').value.trim() };
+  if (editingFutureId) {
+    Object.assign(state.futureGoals.find(x=>x.id===editingFutureId), data);
+  } else {
+    state.futureGoals.push({ id: state.nextFutureId++, uid: newUID(), ...data });
+  }
+  saveState();
+  closeModal('futureModalOverlay');
+  renderMain();
+  showToast('Saved');
+}
+
+async function deleteFutureGoal(id) {
+  const fg = state.futureGoals.find(x => x.id === id);
+  const ok = await appConfirm(`This removes "${fg.title}" from your someday list.`, 'Delete this someday goal?', 'Delete');
+  if (!ok) return;
+  state.futureGoals = state.futureGoals.filter(x => x.id !== id);
+  saveState();
+  renderMain();
+  showToast('Deleted');
+}
+
+let beginningFutureId = null;
+function openBeginGoalModal(futureId) {
+  beginningFutureId = futureId;
+  const fg = state.futureGoals.find(x => x.id === futureId);
+  document.getElementById('bg-title').value = fg.title;
+  document.getElementById('bg-notes').value = fg.note || '';
+  document.getElementById('bg-deadline').value = '';
+  document.getElementById('bg-points').value = 10;
+  const sel = document.getElementById('bg-category');
+  sel.innerHTML = state.categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  document.getElementById('beginGoalModalOverlay').classList.add('show');
+}
+
+function confirmBeginGoal() {
+  const title = document.getElementById('bg-title').value.trim();
+  if (!title) { showToast('Please enter a title'); return; }
+  const sourceFuture = state.futureGoals.find(x => x.id === beginningFutureId);
+  const newGoal = {
+    id: state.nextGoalId++,
+    uid: (sourceFuture && sourceFuture.uid) || newUID(), // keep the same identity as it moves sections
+    title,
+    category: document.getElementById('bg-category').value,
+    notes: document.getElementById('bg-notes').value.trim(),
+    deadline: document.getElementById('bg-deadline').value,
+    points: parseInt(document.getElementById('bg-points').value) || 0,
+    done: false,
+    actions: [],
+  };
+  state.goals.push(newGoal);
+  logLocationChange(newGoal.uid, title, 'Someday Goals', 'Active Goals');
+  // Remove from future goals
+  state.futureGoals = state.futureGoals.filter(x => x.id !== beginningFutureId);
+  saveState();
+  closeModal('beginGoalModalOverlay');
+  setTab(newGoal.category);
+  showToast(`🚀 "${title}" is now an active goal!`);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// RECURRING ACTIONS (habit-building actions across many dates)
+// ═══════════════════════════════════════════════════════════════════
+let recurCustomDates = [];
+let recurTargetGoalId = null;
+
+let editingRecurActionId = null;
+function openRecurModal(goalId, actionId = null) {
+  recurTargetGoalId = goalId;
+  editingRecurActionId = actionId;
+  recurCustomDates = [];
+
+  const g = state.goals.find(x => x.id === goalId);
+  const existing = actionId ? g.actions.find(a => a.id === actionId) : null;
+
+  document.getElementById('recurModalTitle') && (document.getElementById('recurModalTitle').textContent = existing ? 'Edit Recurring Action' : 'Add Recurring Action');
+
+  if (existing) {
+    document.getElementById('rc-text').value = existing.text;
+    document.getElementById('rc-points').value = existing.points;
+    document.getElementById('rc-pattern').value = 'custom'; // editing always shows exact existing dates as custom, safest for not losing done-state
+    recurCustomDates = existing.occurrences.map(o => o.date);
+  } else {
+    document.getElementById('rc-text').value = '';
+    document.getElementById('rc-points').value = 5;
+    document.getElementById('rc-pattern').value = 'daily';
+    document.getElementById('rc-start').value = todayKey();
+    const endDefault = new Date(); endDefault.setDate(endDefault.getDate() + 29);
+    document.getElementById('rc-end').value = dateKey(endDefault);
+  }
+  document.getElementById('rc-custom-date').value = todayKey();
+  renderCustomDateList();
+  onRecurPatternChange();
+  document.getElementById('recurModalOverlay').classList.add('show');
+}
+
+function onRecurPatternChange() {
+  const pattern = document.getElementById('rc-pattern').value;
+  document.getElementById('rc-range-fields').style.display = pattern === 'custom' ? 'none' : 'block';
+  document.getElementById('rc-custom-fields').style.display = pattern === 'custom' ? 'block' : 'none';
+}
+
+function addCustomDate() {
+  const d = document.getElementById('rc-custom-date').value;
+  if (!d) return;
+  if (!recurCustomDates.includes(d)) recurCustomDates.push(d);
+  recurCustomDates.sort();
+  renderCustomDateList();
+}
+
+function removeCustomDate(d) {
+  recurCustomDates = recurCustomDates.filter(x => x !== d);
+  renderCustomDateList();
+}
+
+function renderCustomDateList() {
+  document.getElementById('rc-custom-list').innerHTML = recurCustomDates.map(d => {
+    const label = new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+    return `<div class="recur-date-chip" onclick="removeCustomDate('${d}')" style="cursor:pointer">
+      <span>${label}</span><span style="color:var(--danger)">✕</span>
+    </div>`;
+  }).join('') || `<div style="font-size:11px;color:var(--ink3);font-style:italic">No dates added yet</div>`;
+}
+
+function generateDatesFromPattern() {
+  const pattern = document.getElementById('rc-pattern').value;
+  if (pattern === 'custom') return [...recurCustomDates];
+
+  const start = new Date(document.getElementById('rc-start').value);
+  const end = new Date(document.getElementById('rc-end').value);
+  if (!document.getElementById('rc-start').value || !document.getElementById('rc-end').value || end < start) return [];
+
+  let step = 1;
+  if (pattern === 'every2') step = 2;
+  else if (pattern === 'every3') step = 3;
+  else if (pattern === 'weekly') step = 7;
+
+  const dates = [];
+  let cursor = new Date(start);
+  while (cursor <= end) {
+    dates.push(dateKey(cursor));
+    cursor.setDate(cursor.getDate() + step);
+  }
+  return dates;
+}
+
+function saveRecurringAction() {
+  const text = document.getElementById('rc-text').value.trim();
+  if (!text) { showToast('Please enter an action name'); return; }
+  const points = parseInt(document.getElementById('rc-points').value) || 0;
+  const dates = generateDatesFromPattern();
+  if (!dates.length) { showToast('Please set valid dates'); return; }
+
+  const g = state.goals.find(x => x.id === recurTargetGoalId);
+  if (!g.actions) g.actions = [];
+
+  if (editingRecurActionId) {
+    const existing = g.actions.find(a => a.id === editingRecurActionId);
+    if (existing) {
+      existing.text = text;
+      existing.points = points;
+      // Preserve done-state for dates that still exist; add new dates as undone; drop removed dates
+      const oldByDate = {};
+      existing.occurrences.forEach(o => { oldByDate[o.date] = o.done; });
+      existing.occurrences = dates.map(d => ({ date: d, done: oldByDate[d] || false }));
+      existing.done = existing.occurrences.every(o => o.done);
+      saveState();
+      closeModal('recurModalOverlay');
+      renderMain();
+      showToast(`✓ Recurring action updated — ${dates.length} occurrences`);
+      editingRecurActionId = null;
+      return;
+    }
+  }
+
+  g.actions.push({
+    id: state.nextActionId++,
+    uid: newUID(),
+    text,
+    points,
+    recurring: true,
+    occurrences: dates.map(d => ({ date: d, done: false })),
+    done: false, // overall completion tracked via occurrences
+  });
+  expandedGoals.add(recurTargetGoalId);
+  saveState();
+  closeModal('recurModalOverlay');
+  renderMain();
+  showToast(`✓ Recurring action created — ${dates.length} occurrences`);
+}
+
+function toggleOccurrence(goalId, actionId, date) {
+  const g = state.goals.find(x => x.id === goalId);
+  const a = g.actions.find(x => x.id === actionId);
+  const occ = a.occurrences.find(o => o.date === date);
+  occ.done = !occ.done;
+
+  if (occ.done) logActivity(date, 1);
+  else if (state.dailyLog[date]) state.dailyLog[date] = Math.max(0, state.dailyLog[date] - 1);
+
+  // Mark action fully done if all occurrences done
+  a.done = a.occurrences.every(o => o.done);
+
+  // Check if whole goal auto-completes (all actions done, including recurring fully done)
+  if (g.actions.length && g.actions.every(x => x.done)) {
+    if (!g.done) {
+      g.done = true;
+      showToast(`✓ All actions done! "${g.title}" complete +${goalPoints(g)}pts`);
+      saveState();
+      moveGoalToHistory(g);
+      renderMain();
+      return;
+    }
+  } else if (g.done) {
+    g.done = false;
+  }
+  saveState();
+  renderMain();
+}
+
+
+function renderRewardsPage() {
+  const bal = balance();
+  let html = `<div class="points-banner">
+    <div class="points-value">${bal}</div>
+    <div class="points-label">Points Available</div>
+  </div>`;
+  html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding:0 4px">
+    <div style="font-family:var(--serif);font-size:17px;font-weight:600">Reward Marketplace</div>
+    <div class="cat-add-btn" onclick="openRewardModal()">+ Add Reward</div>
+  </div>`;
+
+  if (!state.rewards.length) {
+    html += `<div class="empty-state"><div class="icon">🎁</div><p>No rewards yet — add one!</p></div>`;
+  } else {
+    const sorted = [...state.rewards].sort((a,b) => a.cost - b.cost);
+    sorted.forEach(r => {
+      const can = bal >= r.cost;
+      html += `<div class="reward-card">
+        <div class="reward-top-row">
+          <div class="reward-icon">${r.icon}</div>
+          <div class="reward-body">
+            <div class="reward-name">${escapeHtml(r.name)}</div>
+            <div class="reward-cost">${r.cost} pts</div>
+          </div>
+        </div>
+        <div class="reward-actions-row">
+          <span class="reward-status ${can?'status-can':'status-cant'}">${can?'Can afford':'Need '+(r.cost-bal)+' more'}</span>
+          <button class="redeem-btn" onclick="redeemReward(${r.id})" ${can?'':'disabled'}>Redeem</button>
+          <div class="goal-actions" style="margin-left:auto">
+            <button onclick="openRewardModal(${r.id})" title="Edit">✎</button>
+            <button class="del-btn" onclick="deleteReward(${r.id})" title="Delete">✕</button>
+          </div>
+        </div>
+      </div>`;
+    });
+  }
+
+  if (state.redeemedLog.length) {
+    html += `<div style="margin-top:18px;display:flex;justify-content:space-between;align-items:baseline;padding:0 4px">
+      <div style="font-family:var(--serif);font-size:15px;font-weight:600">Reward History</div>
+      <div style="font-size:11.5px;color:var(--ink3)">${state.redeemedLog.length} redeemed total</div>
+    </div>`;
+    [...state.redeemedLog].reverse().forEach(r => {
+      const dateLabel = new Date(r.date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+      const timeLabel = new Date(r.date).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+      html += `<div class="reward-card" style="opacity:.85">
+        <div class="reward-top-row">
+          <div class="reward-icon">${r.icon}</div>
+          <div class="reward-body">
+            <div class="reward-name">${escapeHtml(r.name)}</div>
+            <div class="reward-cost" style="color:var(--ink3)">📅 ${dateLabel} · ${timeLabel}</div>
+          </div>
+          <span class="reward-status status-cant" style="flex-shrink:0">-${r.cost} pts</span>
+        </div>
+      </div>`;
+    });
+  } else {
+    html += `<div style="margin-top:18px;padding:0 4px;font-size:12px;color:var(--ink3);font-style:italic">No rewards redeemed yet — your history will show up here with dates, so you can look back and feel proud. 🌟</div>`;
+  }
+
+  return html;
+}
+
+let editingRewardId = null;
+function openRewardModal(id = null) {
+  editingRewardId = id;
+  if (id) {
+    const r = state.rewards.find(x => x.id === id);
+    document.getElementById('rewardModalTitle').textContent = 'Edit Reward';
+    document.getElementById('r-icon').value = r.icon;
+    document.getElementById('r-name').value = r.name;
+    document.getElementById('r-cost').value = r.cost;
+  } else {
+    document.getElementById('rewardModalTitle').textContent = 'Add Reward';
+    document.getElementById('r-icon').value = '🎁';
+    document.getElementById('r-name').value = '';
+    document.getElementById('r-cost').value = 50;
+  }
+  document.getElementById('rewardModalOverlay').classList.add('show');
+}
+
+function saveReward() {
+  const name = document.getElementById('r-name').value.trim();
+  if (!name) { showToast('Please enter a reward name'); return; }
+  const data = {
+    icon: document.getElementById('r-icon').value.trim() || '🎁',
+    name,
+    cost: parseInt(document.getElementById('r-cost').value) || 1,
+  };
+  if (editingRewardId) {
+    Object.assign(state.rewards.find(x=>x.id===editingRewardId), data);
+    showToast('Reward updated');
+  } else {
+    state.rewards.push({ id: state.nextRewardId++, uid: newUID(), ...data });
+    showToast('Reward added');
+  }
+  saveState();
+  closeModal('rewardModalOverlay');
+  renderMain();
+}
+
+async function deleteReward(id) {
+  const r = state.rewards.find(x => x.id === id);
+  const ok = await appConfirm(`This removes "${r.name}" from your rewards marketplace.`, 'Delete this reward?', 'Delete');
+  if (!ok) return;
+  state.rewards = state.rewards.filter(x => x.id !== id);
+  saveState();
+  renderMain();
+  showToast('Reward deleted');
+}
+
+async function redeemReward(id) {
+  const r = state.rewards.find(x => x.id === id);
+  const bal = balance();
+  if (bal < r.cost) return;
+  const ok = await appConfirm(`Balance after: ${bal - r.cost} pts`, `Redeem "${r.name}" for ${r.cost} pts?`, 'Redeem');
+  if (!ok) return;
+  state.redeemedLog.push({ icon: r.icon, name: r.name, cost: r.cost, date: new Date().toISOString() });
+  saveState();
+  renderMain();
+  renderStats();
+  showToast(`🎉 Enjoy your ${r.name}!`);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ASK CLAUDE PAGE
+// ═══════════════════════════════════════════════════════════════════
+function renderAskClaudePage() {
+  return `
+    <div class="ask-claude-panel">
+      <div class="ask-claude-title">✦ Ask Claude about your goals</div>
+      <div class="ask-claude-desc">
+        This app saves everything to your browser, but doesn't connect live to Claude.
+        Use this box to type your question — then tap <b>"Copy context + question"</b>.
+        Paste the result into your Claude conversation. Claude will see your full goal list
+        and can help you plan, prioritize, or even give you new entries to add back here.
+      </div>
+      <textarea class="ask-claude-textarea" id="askClaudeInput" placeholder="e.g. What should I focus on this week? Or: Add a new goal — start the LBS Brand Management course, due in 2 weeks, 20 points."></textarea>
+      <button class="btn btn-primary" style="width:100%" onclick="copyClaudeContext()">📋 Copy context + question for Claude</button>
+    </div>
+    <div class="ask-claude-panel">
+      <div class="ask-claude-title">🔄 How to add Claude's suggestions back</div>
+      <div class="ask-claude-desc">
+        After Claude replies in your conversation, ask it to <b>"give me this as JSON to import"</b>.
+        Claude can format new goals/rewards as a JSON file. Use the <b>Import</b> button (⬆ top right)
+        to load that file directly — it merges into your existing goals without overwriting anything.
+      </div>
+    </div>
+    <div class="ask-claude-panel">
+      <div class="ask-claude-title">💾 Backup tip</div>
+      <div class="ask-claude-desc">
+        Tap <b>Export</b> (⬇ top right) regularly to download a backup JSON file of everything —
+        goals, rewards, points, categories. If you ever switch devices or clear browser data,
+        use Import to restore it instantly.
+      </div>
+    </div>
+  `;
+}
+
+function copyClaudeContext() {
+  const q = document.getElementById('askClaudeInput').value.trim();
+  const summary = buildContextSummary();
+  const text = `Here's my current Life Goals data:\\n\\n${summary}\\n\\nMy question: ${q || '(no question entered)'}`;
+  navigator.clipboard.writeText(text).then(() => {
+    showToast('📋 Copied! Paste it into your Claude chat.');
+  }).catch(() => {
+    // fallback
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+    showToast('📋 Copied! Paste it into your Claude chat.');
+  });
+}
+
+function buildContextSummary() {
+  let out = `POINTS BALANCE: ${balance()} (earned ${totalEarned()}, spent ${totalSpent()})\\n\\nCATEGORIES & GOALS:\\n`;
+  state.categories.forEach(cat => {
+    const goals = state.goals.filter(g => g.category === cat.id);
+    out += `\\n${cat.name}:\\n`;
+    if (!goals.length) out += `  (no goals yet)\\n`;
+    goals.forEach(g => {
+      const ac = g.actions && g.actions.length ? ` [${g.actions.filter(a=>a.done).length}/${g.actions.length} actions done]` : '';
+      out += `  - [${g.done?'DONE':'TODO'}] ${g.title}${g.deadline?' (deadline: '+g.deadline+')':''} — ${g.points}pts${ac}${g.notes?' — '+g.notes:''}\\n`;
+      if (g.actions && g.actions.length) {
+        g.actions.forEach(a => {
+          out += `      • [${a.done?'x':' '}] ${a.text}${a.deadline?' (due '+a.deadline+')':''}\\n`;
+        });
+      }
+    });
+  });
+  out += `\\nREWARDS:\\n`;
+  state.rewards.forEach(r => out += `  - ${r.icon} ${r.name} — ${r.cost}pts\\n`);
+  if (state.goalHistory.length) {
+    out += `\\nCOMPLETED GOALS (HISTORY) — ${state.goalHistory.length} total:\\n`;
+    [...state.goalHistory].reverse().slice(0,10).forEach(g => {
+      out += `  - ${g.title} (completed ${g.completedDate}, ${goalPoints(g)}pts)\\n`;
+    });
+  }
+  if (state.futureGoals.length) {
+    out += `\\nSOMEDAY / FUTURE GOALS (not active yet):\\n`;
+    state.futureGoals.forEach(fg => out += `  - ${fg.icon} ${fg.title}${fg.note?' — '+fg.note:''}\\n`);
+  }
+  if (state.evidenceJournal.length) {
+    out += `\\nRECENT EVIDENCE JOURNAL ENTRIES:\\n`;
+    [...state.evidenceJournal].reverse().slice(0,5).forEach(e => out += `  - ${e.text}\\n`);
+  }
+  const v = state.visionPage;
+  if (v.fulfilled || v.morning || v.proud || v.peace || v.legacy) {
+    out += `\\nMY VISION PAGE:\\n`;
+    if (v.fulfilled) out += `  Fulfilled life feels like: ${v.fulfilled}\\n`;
+    if (v.morning) out += `  Ideal morning: ${v.morning}\\n`;
+    if (v.proud) out += `  Want to be proud of: ${v.proud}\\n`;
+    if (v.peace) out += `  Peace looks like: ${v.peace}\\n`;
+    if (v.legacy) out += `  Legacy: ${v.legacy}\\n`;
+  }
+  const db = state.destinyBlueprint;
+  if (db.statement || db.sixMonth || db.oneYear || db.fiveYear || db.tenYear) {
+    out += `\\nDESTINY BLUEPRINT:\\n`;
+    if (db.statement) out += `  Vision statement: ${db.statement}\\n`;
+    if (db.sixMonth) out += `  6-month horizon: ${db.sixMonth}\\n`;
+    if (db.oneYear) out += `  1-year horizon: ${db.oneYear}\\n`;
+    if (db.fiveYear) out += `  5-year horizon: ${db.fiveYear}\\n`;
+    if (db.tenYear) out += `  10-year horizon: ${db.tenYear}\\n`;
+  }
+  const score = computeDestinyScore();
+  out += `\\nTODAY'S DESTINY SCORE: ${score.pct}%\\n`;
+  score.signals.forEach(s => out += `  - [${s.met?'✓':'✗'}] ${s.label}\\n`);
+  return out;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SETTINGS PAGE
+// ═══════════════════════════════════════════════════════════════════
+function renderSettingsPage() {
+  // ── VERSION & DATA HEALTH ──
+  const goalCount = state.goals.length + state.goalHistory.length;
+  const installedLabel = state.firstInstalledDate ? new Date(state.firstInstalledDate).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
+  const updatedLabel = state.appVersionUpdatedDate ? new Date(state.appVersionUpdatedDate).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : installedLabel;
+  let html = `<div class="ask-claude-panel">
+    <div class="ask-claude-title">🏷️ App Version & Data Health</div>
+    <div class="sync-status-row">
+      <div class="sync-dot connected"></div>
+      <div style="flex:1">Code version <b>${APP_VERSION}</b><br><span style="color:var(--ink3);font-size:11px">${escapeHtml(APP_VERSION_LABEL)}</span></div>
+    </div>
+    <div class="ask-claude-desc" style="margin-bottom:0">
+      Code last updated on this device: <b>${updatedLabel}</b><br>
+      First installed: <b>${installedLabel}</b><br>
+      Data on this device right now: <b>${goalCount} goals</b> (active + completed), <b>${state.evidenceJournal.length} journal entries</b>, <b>${Object.keys(state.dailyCheckins).length} check-ins</b>, <b>${state.affirmations.length} affirmations</b>, <b>${state.scheduledGoals.length} scheduled goals</b><br><br>
+      <b>Everything here — including affirmations, your vision, and scheduled goals — is included every time you Export or Push to Cloud.</b><br><br>
+      <b>Replacing the HTML file with a new version never deletes this data</b> — your goals live in
+      this browser's storage, separate from the code. Export a backup below before any big update,
+      just as a safety net.
+    </div>
+  </div>`;
+
+  html += `<div class="ask-claude-panel">
+    <div class="ask-claude-title">🌐 Use This App on All Your Devices (GitHub Pages)</div>
+    <div class="ask-claude-desc">
+      This app is one HTML file with no server — perfect for free hosting on GitHub Pages.
+      <br><br><b>Setup (one time, ~5 mins):</b><br>
+      1. Create a free GitHub account if you don't have one<br>
+      2. Create a new repository (e.g. "my-life-goals")<br>
+      3. Upload this HTML file, rename it to <code>index.html</code><br>
+      3b. Also upload the two small files Claude provided (<code>manifest.json</code> and <code>sw.js</code>) into the same folder — they're tiny and make the app installable + work offline<br>
+      4. Go to repo Settings → Pages → set source to "main" branch → Save<br>
+      5. GitHub gives you a URL like <code>yourname.github.io/my-life-goals</code><br>
+      6. Open that URL on your phone, laptop, anywhere — same app, same look<br><br>
+      <b>Important:</b> each device has its <i>own</i> local storage — they don't auto-sync with each other.
+      That's what Export/Import (below) is for: think of it as a manual sync button.
+    </div>
+  </div>`;
+
+  // ── CLOUD SYNC PANEL ──
+  const sync = state.githubSync;
+  const isConnected = !!(sync.token && sync.owner && sync.repo);
+  html += `<div class="ask-claude-panel">
+    <div class="ask-claude-title">☁️ Cloud Backup & Sync (via your own GitHub repo)</div>
+    <div class="ask-claude-desc">
+      This protects you if you lose your phone. Your data gets pushed to a private file in a GitHub
+      repository YOU own — free, and only accessible by you. Open the same app from any device,
+      tap "Pull from Cloud," and everything comes back.
+      <br><br><b>⚠️ Use a DIFFERENT repo than the one hosting your app</b> — the hosting repo (above) is
+      public so GitHub Pages can serve it, but this data repo should be <b>private</b> so your goals,
+      journal, and reflections stay just for you.
+    </div>
+    <div class="sync-status-row">
+      <div class="sync-dot ${isConnected ? 'connected' : 'disconnected'}"></div>
+      <div style="flex:1">
+        ${isConnected
+          ? `Connected to <b>${escapeHtml(sync.owner)}/${escapeHtml(sync.repo)}</b>${sync.lastSync ? ` · Last synced ${new Date(sync.lastSync).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}` : ' · Never synced yet'}`
+          : 'Not connected yet'}
+      </div>
+    </div>`;
+
+  if (!isConnected) {
+    html += `
+    <div class="ask-claude-desc" style="margin-bottom:10px">
+      <b>One-time setup (~3 mins):</b><br>
+      1. Go to github.com → create a free account if needed<br>
+      2. Create a new <b>private</b> repository (e.g. "my-life-goals-data")<br>
+      3. Go to github.com/settings/tokens → "Generate new token (classic)"<br>
+      4. Check the box for <b>"repo"</b> scope only → Generate → copy the token<br>
+      5. Paste your details below
+    </div>
+    <div class="field-label">GitHub Username</div>
+    <input class="field-input" id="sync-owner" placeholder="yourusername" value="${escapeHtml(sync.owner)}">
+    <div class="field-label">Repository Name</div>
+    <input class="field-input" id="sync-repo" placeholder="my-life-goals-data" value="${escapeHtml(sync.repo)}">
+    <div class="field-label">Personal Access Token</div>
+    <input class="field-input" id="sync-token" type="password" placeholder="ghp_xxxxxxxxxxxx" value="${escapeHtml(sync.token)}">
+    <div style="margin-top:12px"><button class="btn btn-primary" style="width:100%" onclick="connectGithubSync()">Connect</button></div>
+    <div class="ask-claude-desc" style="margin-top:10px;font-size:11.5px">🔒 Your token is stored only in this browser's local storage — it's never sent anywhere except directly to GitHub's own servers.</div>
+    `;
+  } else {
+    html += `
+    <div class="modal-actions" style="margin-top:4px">
+      <button class="btn btn-primary" onclick="pushToCloud()">⬆ Push to Cloud</button>
+      <button class="btn btn-primary" onclick="pullFromCloud()">⬇ Pull from Cloud</button>
+    </div>
+    <div style="margin-top:8px"><button class="btn btn-ghost" style="width:100%" onclick="disconnectGithubSync()">Disconnect</button></div>
+    `;
+  }
+  html += `</div>`;
+
+  html += `<div class="ask-claude-panel">
+    <div class="ask-claude-title">📴 Works Offline</div>
+    <div class="ask-claude-desc">Once this page has loaded once, it keeps working without internet — all your data lives in this browser. You only need internet for Cloud Sync above, or for pasting context into Claude/ChatGPT.</div>
+  </div>`;
+
+  html += `<div class="ask-claude-panel">
+    <div class="ask-claude-title">📤 Export — Save a Backup</div>
+    <div class="ask-claude-desc">Downloads a single JSON file with EVERYTHING: goals, actions, history, points, rewards, vision page, journal, future goals. Do this regularly, and always before switching devices or clearing browser data.</div>
+    <button class="btn btn-primary" style="width:100%" onclick="exportData()">⬇ Export My Data Now</button>
+  </div>`;
+
+  html += `<div class="ask-claude-panel">
+    <div class="ask-claude-title">📥 Import — Restore or Sync</div>
+    <div class="ask-claude-desc">Load a previously exported JSON file. Use this to: restore after clearing data, move to a new device/browser, or merge in new goals Claude gave you. Existing data is kept — imported items are merged in, not overwritten.</div>
+    <button class="btn btn-primary" style="width:100%" onclick="document.getElementById('importFile').click()">⬆ Import a Backup File</button>
+  </div>`;
+
+  html += `<div class="ask-claude-panel">
+    <div class="ask-claude-title">📁 Categories</div>
+    <div class="ask-claude-desc">Add, rename, or remove goal categories. Deleting a category keeps its goals — they move to "Uncategorized" view under "All Goals".</div>`;
+
+  state.categories.forEach((cat, idx) => {
+    const count = state.goals.filter(g=>g.category===cat.id).length;
+    html += `<div class="settings-row">
+      <div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0">
+        <button class="reorder-btn" onclick="moveCategory('${cat.id}',-1)" ${idx===0?'disabled':''} title="Move up">▲</button>
+        <button class="reorder-btn" onclick="moveCategory('${cat.id}',1)" ${idx===state.categories.length-1?'disabled':''} title="Move down">▼</button>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div class="settings-label"><span class="cat-dot" style="display:inline-block;background:var(--c-${cat.color});margin-right:8px;vertical-align:middle"></span>${escapeHtml(cat.name)}</div>
+        <div class="settings-sub">${count} goal${count!==1?'s':''}${cat.note ? ` · "${escapeHtml(cat.note.slice(0,40))}${cat.note.length>40?'…':''}"` : ''}</div>
+      </div>
+      <div class="goal-actions">
+        <button onclick="editCategoryNote('${cat.id}')" title="Edit note">📝</button>
+        <button onclick="renameCategory('${cat.id}')" title="Rename">✎</button>
+        <button class="del-btn" onclick="deleteCategory('${cat.id}')" title="Delete">✕</button>
+      </div>
+    </div>`;
+  });
+  html += `<div style="margin-top:12px"><button class="btn btn-primary" style="width:100%" onclick="openCatModal()">+ Add Category</button></div></div>`;
+
+  html += `<div class="ask-claude-panel">
+    <div class="ask-claude-title">🗑 Reset</div>
+    <div class="ask-claude-desc">This clears ALL data — goals, rewards, points, categories. Export a backup first if you might want it back.</div>
+    <button class="btn btn-danger" style="width:100%" onclick="resetAll()">Reset everything</button>
+  </div>`;
+
+  html += `<div class="ask-claude-panel">
+    <div class="ask-claude-title">ℹ️ About</div>
+    <div class="ask-claude-desc">Your data is saved in this browser only (localStorage). It survives closing the tab and restarting your device, but is lost if you clear browser data or switch browsers — use Export/Import to move it.</div>
+  </div>`;
+
+  return html;
+}
+
+function moveCategory(id, direction) {
+  const idx = state.categories.findIndex(c => c.id === id);
+  const newIdx = idx + direction;
+  if (newIdx < 0 || newIdx >= state.categories.length) return;
+  const arr = state.categories;
+  [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+  saveState();
+  renderTabs();
+  renderMain();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SUBGROUP MANAGEMENT
+// ═══════════════════════════════════════════════════════════════════
+let editingSubgroupCatId = null;
+let editingSubgroupId = null;
+
+function openSubgroupModal(catId, sgId = null) {
+  editingSubgroupCatId = catId;
+  editingSubgroupId = sgId;
+  const cat = state.categories.find(c => c.id === catId);
+  if (sgId) {
+    const sg = cat.subgroups.find(s => s.id === sgId);
+    document.getElementById('subgroupModalTitle').textContent = 'Rename Subgroup';
+    document.getElementById('sg-name').value = sg ? sg.name : '';
+  } else {
+    document.getElementById('subgroupModalTitle').textContent = 'New Subgroup';
+    document.getElementById('sg-name').value = '';
+  }
+  document.getElementById('subgroupModalOverlay').classList.add('show');
+  setTimeout(() => document.getElementById('sg-name').focus(), 100);
+}
+
+function saveSubgroup() {
+  const name = document.getElementById('sg-name').value.trim();
+  if (!name) { showToast('Please enter a name'); return; }
+  const cat = state.categories.find(c => c.id === editingSubgroupCatId);
+  if (!cat.subgroups) cat.subgroups = [];
+
+  if (editingSubgroupId) {
+    const sg = cat.subgroups.find(s => s.id === editingSubgroupId);
+    if (sg) sg.name = name;
+  } else {
+    const id = `sg_${state.nextSubgroupId++}`;
+    cat.subgroups.push({ id, name, collapsed: false });
+  }
+  saveState();
+  closeModal('subgroupModalOverlay');
+  renderMain();
+  showToast('Saved');
+}
+
+function renameSubgroup(catId, sgId) {
+  openSubgroupModal(catId, sgId);
+}
+
+async function deleteSubgroup(catId, sgId) {
+  const cat = state.categories.find(c => c.id === catId);
+  const sg = cat.subgroups.find(s => s.id === sgId);
+  const count = state.goals.filter(g => g.category === catId && g.subgroup === sgId).length;
+  const ok = await appConfirm(
+    `${count} goal${count!==1?'s':''} will become ungrouped.`,
+    `Delete subgroup "${sg.name}"?`, 'Delete'
+  );
+  if (!ok) return;
+  cat.subgroups = cat.subgroups.filter(s => s.id !== sgId);
+  state.goals.forEach(g => { if (g.category === catId && g.subgroup === sgId) delete g.subgroup; });
+  saveState();
+  renderMain();
+  showToast('Subgroup deleted');
+}
+
+function toggleSubgroup(catId, sgId) {
+  const cat = state.categories.find(c => c.id === catId);
+  const sg = cat.subgroups.find(s => s.id === sgId);
+  if (sg) sg.collapsed = !sg.collapsed;
+  saveState();
+  renderMain();
+}
+
+// ── DRAG AND DROP ──
+let _draggingGoalId = null;
+
+function dragGoal(event, goalId) {
+  _draggingGoalId = goalId;
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', String(goalId));
+  // Add visual class after a brief tick so the drag ghost looks right
+  setTimeout(() => {
+    const el = event.target;
+    if (el) el.classList.add('dragging');
+  }, 0);
+}
+
+function endDragGoal(event) {
+  _draggingGoalId = null;
+  document.querySelectorAll('.goal-card.dragging').forEach(el => el.classList.remove('dragging'));
+  document.querySelectorAll('.subgroup-drop-target.drag-over').forEach(el => el.classList.remove('drag-over'));
+}
+
+function dropGoalToSubgroup(event, catId, sgId) {
+  event.preventDefault();
+  document.querySelectorAll('.subgroup-drop-target.drag-over').forEach(el => el.classList.remove('drag-over'));
+  const goalId = parseInt(event.dataTransfer.getData('text/plain') || _draggingGoalId);
+  if (!goalId) return;
+  const g = state.goals.find(x => x.id === goalId);
+  if (!g) return;
+  // Move to this category too if needed (drag across categories not common but safe to handle)
+  g.category = catId;
+  if (sgId) g.subgroup = sgId;
+  else delete g.subgroup;
+  saveState();
+  renderMain();
+  showToast(`Moved to ${sgId ? state.categories.find(c=>c.id===catId)?.subgroups?.find(s=>s.id===sgId)?.name : 'Ungrouped'}`);
+}
+
+
+function renameCategory(id) {
+  const cat = state.categories.find(c => c.id === id);
+  const name = prompt('Rename category:', cat.name);
+  if (name && name.trim()) { cat.name = name.trim(); saveState(); renderTabs(); renderMain(); }
+}
+
+let editingNoteCatId = null;
+function editCategoryNote(id) {
+  editingNoteCatId = id;
+  const cat = state.categories.find(c => c.id === id);
+  document.getElementById('catNoteModalTitle').textContent = `Edit Note — ${cat.name}`;
+  document.getElementById('cn-note').value = cat.note || '';
+  document.getElementById('catNoteModalOverlay').classList.add('show');
+  setTimeout(() => document.getElementById('cn-note').focus(), 100);
+}
+
+function saveCategoryNote() {
+  const cat = state.categories.find(c => c.id === editingNoteCatId);
+  if (!cat) return;
+  cat.note = document.getElementById('cn-note').value.trim();
+  saveState();
+  closeModal('catNoteModalOverlay');
+  renderMain();
+  showToast('✓ Note saved');
+}
+
+async function deleteCategory(id) {
+  if (state.categories.length <= 1) { showToast('You need at least one category'); return; }
+  const cat = state.categories.find(c => c.id === id);
+  const count = state.goals.filter(g=>g.category===id).length;
+  const ok = await appConfirm(`${count} goal(s) will remain but lose their category grouping.`, `Delete "${cat.name}"?`, 'Delete');
+  if (!ok) return;
+  state.categories = state.categories.filter(c => c.id !== id);
+  saveState();
+  if (currentTab === id) currentTab = 'all';
+  renderTabs(); renderMain();
+  showToast('Category deleted');
+}
+
+function openCatModal() {
+  document.getElementById('c-name').value = '';
+  const picker = document.getElementById('catColorPicker');
+  picker.innerHTML = COLOR_KEYS.map(k =>
+    `<div onclick="document.getElementById('c-color').value='${k}';document.querySelectorAll('#catColorPicker > div').forEach(d=>d.style.outline='none');this.style.outline='2px solid var(--ink)'"
+      style="width:32px;height:32px;border-radius:50%;background:var(--c-${k});cursor:pointer" title="${COLOR_NAMES[k]}"></div>`
+  ).join('');
+  document.getElementById('c-color').value = COLOR_KEYS[0];
+  document.getElementById('catModalOverlay').classList.add('show');
+}
+
+function saveCategory() {
+  const name = document.getElementById('c-name').value.trim();
+  if (!name) { showToast('Please enter a name'); return; }
+  const id = 'cat_' + Date.now();
+  state.categories.push({ id, name, color: document.getElementById('c-color').value });
+  saveState();
+  closeModal('catModalOverlay');
+  renderTabs(); renderMain();
+  showToast('Category added');
+}
+
+async function resetAll() {
+  const ok1 = await appConfirm('This will delete EVERYTHING — all goals, history, points, rewards, journal entries, and blueprint data.', 'Reset all data?', 'Continue');
+  if (!ok1) return;
+  const ok2 = await appConfirm('This action cannot be undone. Make sure you exported a backup if you want one.', 'Really sure?', 'Yes, delete everything');
+  if (!ok2) return;
+  state = JSON.parse(JSON.stringify(DEFAULT_DATA));
+  saveState();
+  currentTab = 'all';
+  renderTabs(); renderMain();
+  showToast('Reset complete');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// IMPORT / EXPORT
+// ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+// GITHUB CLOUD SYNC — push/pull your data via GitHub's REST API
+// Uses a personal access token stored only in this browser's localStorage.
+// ═══════════════════════════════════════════════════════════════════
+function connectGithubSync() {
+  const owner = document.getElementById('sync-owner').value.trim();
+  const repo = document.getElementById('sync-repo').value.trim();
+  const token = document.getElementById('sync-token').value.trim();
+  if (!owner || !repo || !token) { showToast('Please fill in all three fields'); return; }
+  state.githubSync.owner = owner;
+  state.githubSync.repo = repo;
+  state.githubSync.token = token;
+  saveState();
+  renderMain();
+  showToast('Connected — try "Push to Cloud" now');
+}
+
+function disconnectGithubSync() {
+  state.githubSync = { token: '', owner: '', repo: '', path: 'life-goals-data.json', lastSync: '' };
+  saveState();
+  renderMain();
+  showToast('Disconnected');
+}
+
+function githubApiUrl() {
+  const s = state.githubSync;
+  return `https://api.github.com/repos/${encodeURIComponent(s.owner)}/${encodeURIComponent(s.repo)}/contents/${encodeURIComponent(s.path)}`;
+}
+
+function b64EncodeUnicode(str) {
+  return btoa(unescape(encodeURIComponent(str)));
+}
+function b64DecodeUnicode(str) {
+  return decodeURIComponent(escape(atob(str)));
+}
+
+async function pushToCloud() {
+  const s = state.githubSync;
+  showToast('Pushing to cloud...');
+  try {
+    // Need current file SHA if it already exists, otherwise GitHub rejects the update
+    let sha = null;
+    const getResp = await fetch(githubApiUrl(), {
+      headers: { 'Authorization': `token ${s.token}`, 'Accept': 'application/vnd.github+json' }
+    });
+    if (getResp.status === 200) {
+      const getData = await getResp.json();
+      sha = getData.sha;
+    } else if (getResp.status !== 404) {
+      const err = await getResp.json().catch(()=>({}));
+      throw new Error(err.message || `GitHub error ${getResp.status}`);
+    }
+
+    const content = b64EncodeUnicode(JSON.stringify(state, null, 2));
+    const body = {
+      message: `Life Goals backup — ${new Date().toLocaleString('en-GB')}`,
+      content,
+    };
+    if (sha) body.sha = sha;
+
+    const putResp = await fetch(githubApiUrl(), {
+      method: 'PUT',
+      headers: { 'Authorization': `token ${s.token}`, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!putResp.ok) {
+      const err = await putResp.json().catch(()=>({}));
+      throw new Error(err.message || `GitHub error ${putResp.status}`);
+    }
+    state.githubSync.lastSync = new Date().toISOString();
+    saveState();
+    renderMain();
+    showToast('☁️ Pushed to cloud successfully');
+  } catch (e) {
+    showToast('Push failed: ' + e.message);
+  }
+}
+
+async function pullFromCloud() {
+  const s = state.githubSync;
+  const ok = await appConfirm('This will merge cloud data into what you have here (existing items are kept, new ones added).', 'Pull from cloud?', 'Pull');
+  if (!ok) return;
+  showToast('Pulling from cloud...');
+  try {
+    const resp = await fetch(githubApiUrl(), {
+      headers: { 'Authorization': `token ${s.token}`, 'Accept': 'application/vnd.github+json' }
+    });
+    if (resp.status === 404) { showToast('No backup found in cloud yet — try Push first'); return; }
+    if (!resp.ok) {
+      const err = await resp.json().catch(()=>({}));
+      throw new Error(err.message || `GitHub error ${resp.status}`);
+    }
+    const data = await resp.json();
+    const decoded = b64DecodeUnicode(data.content.replace(/\n/g,''));
+    const incoming = JSON.parse(decoded);
+    mergeIncomingData(incoming);
+    state.githubSync.lastSync = new Date().toISOString();
+    saveState();
+    renderTabs(); renderMain();
+    showToast('☁️ Pulled from cloud and merged');
+  } catch (e) {
+    showToast('Pull failed: ' + e.message);
+  }
+}
+
+function exportData() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `life-goals-backup-${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Backup downloaded');
+}
+
+// Merges an incoming list of actions into an existing goal's actions array,
+// matching by uid so the same action edited/completed on two devices never
+// duplicates — it just ends up reflecting the most progress made on either device.
+function mergeActionsInPlace(existingGoal, incomingActions) {
+  if (!existingGoal.actions) existingGoal.actions = [];
+  incomingActions.forEach(incA => {
+    if (!incA.uid) incA.uid = newUID();
+    const existingA = existingGoal.actions.find(x => x.uid === incA.uid);
+    if (!existingA) {
+      // New action from the other device — just add it
+      existingGoal.actions.push(Object.assign({}, incA, { id: state.nextActionId++ }));
+      return;
+    }
+    if (incA.recurring && incA.occurrences) {
+      if (!existingA.occurrences) existingA.occurrences = [];
+      incA.occurrences.forEach(incOcc => {
+        const existingOcc = existingA.occurrences.find(o => o.date === incOcc.date);
+        if (existingOcc) {
+          if (incOcc.done) existingOcc.done = true; // done on either device wins
+        } else {
+          existingA.occurrences.push(incOcc);
+        }
+      });
+      existingA.done = existingA.occurrences.every(o => o.done);
+    } else {
+      if (incA.done) existingA.done = true; // done on either device wins, never un-completes
+    }
+  });
+}
+
+function mergeIncomingData(incoming) {
+  // ── CATEGORIES: match by name (case-insensitive) first, then id.
+  // Build a remapping table: importId -> liveId, so goals get the right category.
+  const catIdRemap = {}; // importCatId -> actual cat id in state
+  if (incoming.categories) {
+    incoming.categories.forEach(c => {
+      // Try to find a matching category by name
+      const existing = state.categories.find(x =>
+        x.name.toLowerCase().trim() === c.name.toLowerCase().trim() ||
+        x.id === c.id
+      );
+      if (existing) {
+        catIdRemap[c.id] = existing.id;
+        // Merge subgroups into the existing category
+        if (c.subgroups && c.subgroups.length) {
+          if (!existing.subgroups) existing.subgroups = [];
+          c.subgroups.forEach(sg => {
+            const sgExists = existing.subgroups.find(x =>
+              x.id === sg.id || x.name.toLowerCase().trim() === sg.name.toLowerCase().trim()
+            );
+            if (!sgExists) {
+              // Remap subgroup id to avoid collisions
+              const newSgId = `sg_imp_${state.nextSubgroupId++}`;
+              catIdRemap[sg.id] = newSgId; // track subgroup id remapping too
+              existing.subgroups.push({ ...sg, id: newSgId });
+            } else {
+              catIdRemap[sg.id] = sgExists.id; // map import sg id to existing sg id
+            }
+          });
+        }
+        if (!existing.note && c.note) existing.note = c.note;
+      } else {
+        // Genuinely new category — add it, remapping to the same id
+        catIdRemap[c.id] = c.id;
+        if (c.subgroups) {
+          c.subgroups.forEach(sg => { catIdRemap[sg.id] = sg.id; });
+          if (!state.nextSubgroupId) state.nextSubgroupId = 1;
+          state.nextSubgroupId = Math.max(state.nextSubgroupId, c.subgroups.length + 10);
+        }
+        if (!c.subgroups) c.subgroups = [];
+        state.categories.push(c);
+      }
+    });
+  }
+
+  // ── GOALS: match by uid first. If found, update in place (no duplicate).
+  // If not found by uid, fall back to checking numeric id (for old data
+  // saved before uid existed), and only as a last resort treat as new. ──
+  if (incoming.goals) {
+    incoming.goals.forEach(incGoal => {
+      if (!incGoal.actions) incGoal.actions = [];
+      let existing = incGoal.uid ? state.goals.find(x => x.uid === incGoal.uid) : null;
+      if (!existing && !incGoal.uid) {
+        // Legacy item with no uid — best-effort match by id, but this is a fallback only
+        existing = state.goals.find(x => x.id === incGoal.id && !x.uid);
+      }
+      if (existing) {
+        // Same item on both devices — merge actions by uid, keep the most "complete" picture
+        mergeActionsInPlace(existing, incGoal.actions);
+        // Prefer whichever copy is marked done, and keep the newer deadline/notes if changed
+        if (incGoal.done) existing.done = true;
+        existing.title = existing.title || incGoal.title;
+        if (!existing.notes && incGoal.notes) existing.notes = incGoal.notes;
+        if (!existing.deadline && incGoal.deadline) existing.deadline = incGoal.deadline;
+      } else {
+        // Genuinely new goal from the other device
+        incGoal.actions.forEach(a => { if (!a.uid) a.uid = newUID(); });
+        const newId = state.nextGoalId++;
+        state.nextActionId = Math.max(state.nextActionId||112, ...incGoal.actions.map(a=>a.id||0), state.nextActionId);
+        // Remap category and subgroup IDs to match live state
+        const remappedCat = catIdRemap[incGoal.category] || incGoal.category;
+        const remappedSg = incGoal.subgroup ? (catIdRemap[incGoal.subgroup] || incGoal.subgroup) : undefined;
+        const newGoal = Object.assign({}, incGoal, {
+          id: newId,
+          uid: incGoal.uid || newUID(),
+          category: remappedCat,
+        });
+        if (remappedSg) newGoal.subgroup = remappedSg;
+        else delete newGoal.subgroup;
+        state.goals.push(newGoal);
+      }
+      if (!state.categories.find(c => c.id === (catIdRemap[incGoal.category] || incGoal.category))) {
+        const g = state.goals.find(x => x.uid === (incGoal.uid || ''));
+        if (g) g.category = state.categories[0].id;
+      }
+    });
+  }
+
+  if (incoming.rewards) {
+    incoming.rewards.forEach(incR => {
+      const existing = incR.uid ? state.rewards.find(x => x.uid === incR.uid) : null;
+      if (existing) {
+        Object.assign(existing, { name: incR.name, cost: incR.cost, icon: incR.icon });
+      } else {
+        state.rewards.push(Object.assign({}, incR, { id: state.nextRewardId++, uid: incR.uid || newUID() }));
+      }
+    });
+  }
+
+  if (incoming.goalHistory) {
+    incoming.goalHistory.forEach(g => {
+      const dup = g.uid
+        ? state.goalHistory.find(x => x.uid === g.uid)
+        : state.goalHistory.find(x => x.id === g.id && x.completedDate === g.completedDate);
+      if (!dup) {
+        if (!g.uid) g.uid = newUID();
+        state.goalHistory.push(g);
+      }
+    });
+  }
+
+  if (incoming.dailyLog) {
+    Object.keys(incoming.dailyLog).forEach(key => {
+      state.dailyLog[key] = Math.max(state.dailyLog[key] || 0, incoming.dailyLog[key]);
+    });
+  }
+
+  if (incoming.redeemedLog) {
+    incoming.redeemedLog.forEach(r => {
+      if (!state.redeemedLog.find(x => x.date === r.date && x.name === r.name)) {
+        state.redeemedLog.push(r);
+      }
+    });
+  }
+
+  if (incoming.futureGoals) {
+    incoming.futureGoals.forEach(fg => {
+      const existing = fg.uid ? state.futureGoals.find(x => x.uid === fg.uid) : state.futureGoals.find(x => x.title === fg.title);
+      if (!existing) {
+        state.futureGoals.push(Object.assign({}, fg, { id: state.nextFutureId++, uid: fg.uid || newUID() }));
+      }
+    });
+  }
+
+  if (incoming.evidenceJournal) {
+    incoming.evidenceJournal.forEach(e => {
+      const existing = e.uid
+        ? state.evidenceJournal.find(x => x.uid === e.uid)
+        : state.evidenceJournal.find(x => x.date === e.date && x.text === e.text);
+      if (!existing) {
+        state.evidenceJournal.push(Object.assign({}, e, { id: state.nextEvidenceId++, uid: e.uid || newUID() }));
+      }
+    });
+  }
+
+  if (incoming.blueprintHistory) {
+    incoming.blueprintHistory.forEach(snap => {
+      const existing = snap.uid
+        ? state.blueprintHistory.find(x => x.uid === snap.uid)
+        : state.blueprintHistory.find(x => x.savedDate === snap.savedDate);
+      if (!existing) {
+        state.blueprintHistory.push(Object.assign({}, snap, { id: state.nextBlueprintSnapshotId++, uid: snap.uid || newUID() }));
+      }
+    });
+  }
+
+  if (incoming.visionPage) {
+    Object.keys(incoming.visionPage).forEach(k => {
+      if (incoming.visionPage[k] && !state.visionPage[k]) state.visionPage[k] = incoming.visionPage[k];
+    });
+  }
+  if (incoming.destinyBlueprint) {
+    Object.keys(incoming.destinyBlueprint).forEach(k => {
+      if (incoming.destinyBlueprint[k] && !state.destinyBlueprint[k]) state.destinyBlueprint[k] = incoming.destinyBlueprint[k];
+    });
+  }
+  if (incoming.dailyCheckins) {
+    Object.keys(incoming.dailyCheckins).forEach(d => {
+      if (!state.dailyCheckins[d]) state.dailyCheckins[d] = incoming.dailyCheckins[d];
+    });
+  }
+  if (incoming.affirmations) {
+    incoming.affirmations.forEach(a => {
+      if (!state.affirmations.includes(a)) state.affirmations.push(a);
+    });
+  }
+  if (incoming.scheduledGoals) {
+    incoming.scheduledGoals.forEach(sc => {
+      const dup = state.scheduledGoals.find(x =>
+        x.title === sc.title && x.firstDue === sc.firstDue && x.interval === sc.interval && x.unit === sc.unit
+      );
+      if (!dup) {
+        state.scheduledGoals.push({ ...sc, id: state.nextScheduledId++ });
+      }
+    });
+  }
+  if (incoming.bestStreakEver !== undefined) {
+    state.bestStreakEver = Math.max(state.bestStreakEver||0, incoming.bestStreakEver);
+  }
+  if (incoming.locationLog) {
+    incoming.locationLog.forEach(entry => {
+      const dup = state.locationLog.find(x => x.uid === entry.uid && x.date === entry.date && x.to === entry.to);
+      if (!dup) state.locationLog.push(entry);
+    });
+  }
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const incoming = JSON.parse(e.target.result);
+      mergeIncomingData(incoming);
+      saveState();
+      renderTabs(); renderMain();
+      showToast('✓ Import successful');
+    } catch(err) {
+      showToast('Import failed — invalid file');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MODAL HELPERS / TOAST
+// ═══════════════════════════════════════════════════════════════════
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+document.querySelectorAll('.modal-overlay').forEach(ov => {
+  ov.addEventListener('click', e => { if (e.target === ov) ov.classList.remove('show'); });
+});
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════════
+currentTab = 'dashboard';
+spawnScheduledInstances(); // create any due scheduled goal instances before first render
+renderTabs();
+renderMain();
+
+if (_justUpdatedCode) {
+  setTimeout(() => showToast(`✓ App updated to ${APP_VERSION} — your data is safe`), 400);
+}
+
+// Show affirmation popup once per day, after a short delay so the app renders first
+setTimeout(() => maybeShowAffirmation(), 600);
+
+// Register service worker for offline support
+if ('serviceWorker' in navigator && (location.protocol === 'http:' || location.protocol === 'https:')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
