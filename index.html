@@ -226,6 +226,123 @@ body { min-height: 100vh; padding-bottom: 70px; } /* space for bottom nav */
 .formula-stat-bar-bg { height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
 .formula-stat-bar-fill { height: 100%; border-radius: 4px; background: var(--accent); }
 
+/* ── JOURNEY / MILESTONE PATH ── */
+.journey-page-title { font-family:var(--serif); font-size:20px; font-weight:600; margin-bottom:2px; }
+.journey-page-sub { font-size:12.5px; color:var(--ink3); margin-bottom:20px; line-height:1.5; }
+
+.journey-path { position:relative; padding-left:28px; }
+.journey-path::before {
+  content:''; position:absolute; left:10px; top:8px; bottom:8px; width:2px;
+  background:linear-gradient(to bottom, var(--done), var(--border)); border-radius:2px;
+}
+.journey-level {
+  position:relative; margin-bottom:18px;
+}
+.journey-level-dot {
+  position:absolute; left:-22px; top:6px;
+  width:14px; height:14px; border-radius:50%; border:2.5px solid var(--border);
+  background:var(--surface); z-index:1; transition:all .2s;
+}
+.journey-level.complete .journey-level-dot { background:var(--done); border-color:var(--done); }
+.journey-level.active .journey-level-dot {
+  background:var(--accent); border-color:var(--accent);
+  box-shadow:0 0 0 4px var(--accent-l);
+}
+.journey-level.locked .journey-level-dot { background:var(--surface2); border-color:var(--border); }
+
+.journey-level-card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius); padding:14px 16px; box-shadow:var(--shadow);
+  transition:border-color .15s;
+}
+.journey-level.active .journey-level-card { border-color:var(--accent); }
+.journey-level.locked .journey-level-card { opacity:0.55; }
+.journey-level.complete .journey-level-card { background:var(--surface2); }
+
+.journey-level-header { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; margin-bottom:8px; }
+.journey-level-num { font-size:10.5px; font-weight:700; color:var(--ink3); text-transform:uppercase; letter-spacing:.5px; margin-bottom:2px; }
+.journey-level-title { font-size:14.5px; font-weight:600; color:var(--ink); }
+.journey-level-badge {
+  font-size:10px; font-weight:700; padding:3px 8px; border-radius:10px;
+  white-space:nowrap; flex-shrink:0;
+}
+.badge-complete { background:var(--done-l); color:var(--done); }
+.badge-active   { background:var(--accent-l); color:var(--accent); }
+.badge-locked   { background:var(--surface2); color:var(--ink3); }
+
+.journey-level-desc { font-size:12.5px; color:var(--ink3); margin-bottom:10px; line-height:1.5; }
+
+.journey-goal-chip {
+  display:inline-flex; align-items:center; gap:5px;
+  font-size:12px; padding:4px 10px; border-radius:16px; margin:3px 3px 3px 0;
+  border:1px solid var(--border); background:var(--bg); color:var(--ink2);
+}
+.journey-goal-chip.done { background:var(--done-l); border-color:var(--done); color:var(--done); text-decoration:line-through; }
+.journey-goal-chip.streak { background:var(--c-health-l); border-color:var(--c-health); color:var(--c-health); }
+
+.journey-progress-row { display:flex; align-items:center; gap:8px; margin-top:10px; }
+.journey-progress-bg { flex:1; height:5px; background:var(--surface2); border-radius:3px; overflow:hidden; }
+.journey-progress-fill { height:100%; border-radius:3px; background:var(--accent); transition:width .3s; }
+.journey-progress-text { font-size:11px; color:var(--ink3); white-space:nowrap; }
+
+.journey-actions-row { display:flex; gap:6px; margin-top:10px; flex-wrap:wrap; }
+
+/* ── STICKY PILL ROWS — all scrollable pill rows stick when scrolling page ── */
+.cat-pills-row {
+  position: sticky; top: 0; z-index: 40;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+}
+.month-pill-row { display: flex; gap: 6px; min-width: max-content; padding-bottom: 2px; }
+
+/* ── MONTHLY CALENDAR ── */
+.cal-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.cal-title { font-family:var(--serif); font-size:17px; font-weight:600; }
+.cal-nav-btn { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:6px 12px; cursor:pointer; font-size:14px; color:var(--ink2); }
+.cal-nav-btn:hover { background:var(--border); }
+.cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; }
+.cal-dow { text-align:center; font-size:10.5px; font-weight:600; color:var(--ink3); padding:4px 0; }
+.cal-day {
+  aspect-ratio:1; border-radius:8px; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; cursor:pointer; position:relative;
+  background:var(--surface); border:1px solid var(--border); transition:all .12s;
+}
+.cal-day:hover { border-color:var(--accent); }
+.cal-day.empty { background:transparent; border-color:transparent; cursor:default; }
+.cal-day.today { border-color:var(--accent); background:var(--accent-l); }
+.cal-day.has-tasks { background:var(--surface); }
+.cal-day-num { font-size:12px; font-weight:500; color:var(--ink2); line-height:1; }
+.cal-day.today .cal-day-num { color:var(--accent); font-weight:700; }
+.cal-day.selected { border-color:var(--accent); background:var(--accent-l); }
+.cal-day-badge {
+  font-size:9px; font-weight:700; background:var(--accent); color:white;
+  border-radius:6px; padding:1px 4px; margin-top:2px; min-width:14px; text-align:center;
+}
+.cal-day.has-scheduled .cal-day-badge { background:var(--c-health); }
+.cal-day-detail {
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+  padding:14px 16px; margin-top:14px; box-shadow:var(--shadow);
+}
+.cal-detail-title { font-family:var(--serif); font-size:15px; font-weight:600; margin-bottom:10px; }
+.cal-task-row { display:flex; align-items:flex-start; gap:10px; padding:6px 0; border-bottom:1px solid var(--surface2); }
+.cal-task-row:last-child { border-bottom:none; }
+.cal-task-cat { width:8px; height:8px; border-radius:50%; flex-shrink:0; margin-top:4px; }
+.cal-task-text { flex:1; font-size:13px; color:var(--ink); line-height:1.4; }
+.cal-task-meta { font-size:11px; color:var(--ink3); margin-top:2px; }
+
+/* ── MILESTONES ── */
+.milestone-card {
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+  padding:14px 16px; margin-bottom:10px; box-shadow:var(--shadow);
+}
+.milestone-pinned { border-left:3px solid var(--c-spiritual); }
+.milestone-top { display:flex; align-items:flex-start; gap:10px; }
+.milestone-icon { font-size:22px; flex-shrink:0; }
+.milestone-body { flex:1; min-width:0; }
+.milestone-title { font-size:14px; font-weight:500; color:var(--ink); margin-bottom:2px; }
+.milestone-date { font-size:11px; color:var(--ink3); }
+.milestone-note { font-size:12.5px; color:var(--ink2); margin-top:6px; font-style:italic; line-height:1.5; }
+.milestone-cat-tag { font-size:10.5px; padding:2px 8px; border-radius:8px; font-weight:600; display:inline-block; margin-top:4px; }
+
 /* ── SCHEDULED GOALS ── */
 .scheduled-card {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
@@ -387,6 +504,28 @@ body { min-height: 100vh; padding-bottom: 70px; } /* space for bottom nav */
 
 /* ── DASHBOARD / HEATMAP ── */
 .dash-summary-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 18px; }
+
+/* Compact single-row stat bar for dashboard */
+.dash-stat-bar {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 12px 8px;
+  display: flex; align-items: center; box-shadow: var(--shadow);
+}
+.dash-stat-bar-item {
+  flex: 1; text-align: center; min-width: 0;
+}
+.dash-stat-bar-val {
+  font-size: 16px; font-weight: 700; color: var(--ink);
+  font-family: var(--serif); line-height: 1.2;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dash-stat-bar-label {
+  font-size: 10px; color: var(--ink3); margin-top: 2px;
+  text-transform: uppercase; letter-spacing: 0.3px;
+}
+.dash-stat-bar-divider {
+  width: 1px; height: 28px; background: var(--border); flex-shrink: 0;
+}
 .dash-stat-card {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 14px; text-align: center; box-shadow: var(--shadow);
@@ -819,6 +958,24 @@ body { min-height: 100vh; padding-bottom: 70px; } /* space for bottom nav */
 </head>
 <body>
 
+<!-- UPDATE BANNER — shown when service worker detects new code is available -->
+<div id="updateBanner" style="
+  display:none; position:fixed; top:0; left:0; right:0; z-index:9999;
+  background:var(--accent); color:white; padding:12px 16px;
+  display:none; align-items:center; gap:10px; font-size:13.5px;
+  box-shadow:0 2px 12px rgba(0,0,0,0.2);
+">
+  <div style="flex:1;font-weight:500">✨ New version available</div>
+  <button onclick="doAppUpdate()" style="
+    background:white; color:var(--accent); border:none; border-radius:8px;
+    padding:7px 14px; font-size:13px; font-weight:600; cursor:pointer;
+  ">Update now</button>
+  <button onclick="document.getElementById('updateBanner').style.display='none'" style="
+    background:transparent; border:none; color:white; font-size:18px;
+    cursor:pointer; padding:0 4px; opacity:0.7;
+  ">✕</button>
+</div>
+
 <!-- AFFIRMATION POPUP -->
 <div class="completion-overlay" id="affirmationOverlay">
   <div class="completion-box">
@@ -903,6 +1060,10 @@ body { min-height: 100vh; padding-bottom: 70px; } /* space for bottom nav */
     <div style="display:flex;align-items:center;gap:8px;padding:4px 0 8px">
       <input type="checkbox" id="f-scheduled" style="width:18px;height:18px;cursor:pointer" onchange="toggleGoalScheduleFields()">
       <label for="f-scheduled" style="font-size:13px;color:var(--ink2);cursor:pointer">🔄 Make this a recurring scheduled goal</label>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;padding:4px 0 8px">
+      <input type="checkbox" id="f-milestone" style="width:18px;height:18px;cursor:pointer">
+      <label for="f-milestone" style="font-size:13px;color:var(--ink2);cursor:pointer">🏅 Mark as a milestone goal</label>
     </div>
     <div id="f-schedule-fields" style="display:none;background:var(--surface2);border-radius:10px;padding:12px;margin-bottom:8px">
       <div class="field-label" style="margin-bottom:6px">Repeat every</div>
@@ -990,6 +1151,37 @@ body { min-height: 100vh; padding-bottom: 70px; } /* space for bottom nav */
 
 <!-- Hidden file input for import — must exist in DOM for the import button to work -->
 <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+
+<!-- JOURNEY LEVEL MODAL -->
+<div class="modal-overlay" id="journeyLevelModalOverlay">
+  <div class="modal">
+    <div class="modal-title" id="journeyLevelModalTitle">Add Level</div>
+    <div class="field-label">Level title</div>
+    <input class="field-input" id="jl-title" placeholder="e.g. Foundation, Visibility, Mastery">
+    <div class="field-label">Description (optional)</div>
+    <input class="field-input" id="jl-desc" placeholder="What does achieving this level mean?">
+    <div class="field-label">Milestone tier (points on completion)</div>
+    <select class="field-select" id="jl-tier">
+      <option value="10">🥉 Small — 10 pts</option>
+      <option value="25" selected>🥈 Medium — 25 pts</option>
+      <option value="50">🥇 Big — 50 pts</option>
+    </select>
+    <div class="field-label">Streak milestone (optional)</div>
+    <div class="field-row">
+      <div><input class="field-input" id="jl-streak" type="number" min="0" placeholder="Days" style="width:80px"></div>
+      <div style="flex:1;font-size:12px;color:var(--ink3);display:flex;align-items:center">days straight auto-completes this level</div>
+    </div>
+    <div class="field-label">Scheduled goal occurrence count (optional)</div>
+    <div class="field-row">
+      <div><input class="field-input" id="jl-occurrences" type="number" min="0" placeholder="Count" style="width:80px"></div>
+      <div style="flex:1;font-size:12px;color:var(--ink3);display:flex;align-items:center">completions of a scheduled goal auto-completes this level</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('journeyLevelModalOverlay')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveJourneyLevel()">Save Level</button>
+    </div>
+  </div>
+</div>
 
 <!-- SUBGROUP MODAL -->
 <div class="modal-overlay" id="subgroupModalOverlay">
@@ -1184,8 +1376,8 @@ body { min-height: 100vh; padding-bottom: 70px; } /* space for bottom nav */
 // with a new one from Claude. Shown in Settings so you always know
 // which version you're running and when it last changed.
 // ═══════════════════════════════════════════════════════════════════
-const APP_VERSION = '2026.06.17';
-const APP_VERSION_LABEL = 'Cloud Sync + Check-in Insights + Versioning';
+const APP_VERSION = '2026.07.25';
+const APP_VERSION_LABEL = 'Monthly Dashboard + Journey Milestones + Full Sync';
 
 const COLOR_KEYS = ['spiritual','self','health','family','career','social','money'];
 
@@ -1246,6 +1438,10 @@ const DEFAULT_DATA = {
   nextSubgroupId: 1,
   scheduledGoals: [],
   nextScheduledId: 1,
+  milestones: [], // manually pinned milestones with personal notes
+  nextMilestoneId: 1,
+  journeys: {}, // key: "catId__sgId" -> { levels: [ { id, title, desc, linkedGoalUids[], streakTarget, streakCatId, completedManually, completedDate } ] }
+  nextJourneyLevelId: 1,
 };
 
 let state = loadState();
@@ -1317,6 +1513,10 @@ function backfillUIDs(s) {
   if (!s.nextSubgroupId) s.nextSubgroupId = 1;
   if (!s.scheduledGoals) s.scheduledGoals = [];
   if (!s.nextScheduledId) s.nextScheduledId = 1;
+  if (!s.milestones) s.milestones = [];
+  if (!s.nextMilestoneId) s.nextMilestoneId = 1;
+  if (!s.journeys) s.journeys = {};
+  if (!s.nextJourneyLevelId) s.nextJourneyLevelId = 1;
   if (s.bestStreakEver === undefined) s.bestStreakEver = 0;
   if (!s.streakRecordLog) s.streakRecordLog = [];
 }
@@ -1553,18 +1753,13 @@ function renderMain() {
 
   if (currentTab === 'dashboard' || currentTab === 'home') {
     main.innerHTML = renderDashboardPage();
-    // Heatmap now builds with the current week/month leftmost, so it's visible
-    // by default with no scroll needed — scrolling right reveals past months.
-    // Month pills (Jan-Dec calendar order) scroll to the active month so it's visible.
     setTimeout(() => {
-      const monthScroll = document.getElementById('monthScrollWrap');
-      if (monthScroll) {
-        const activePill = monthScroll.querySelector('.month-pill.active');
-        if (activePill && activePill.scrollIntoView) activePill.scrollIntoView({ behavior: 'instant', inline: 'center', block: 'nearest' });
-      }
+      const w = document.getElementById('heatmapScrollWrap');
+      if (w) w.scrollLeft = w.scrollWidth;
     }, 0);
     return;
   }
+  if (currentTab === 'overview') { main.innerHTML = renderOverviewPage(); return; }
   if (currentTab === 'today')     { main.innerHTML = renderTodayPage(); return; }
   if (currentTab === 'overdue')   { main.innerHTML = renderOverduePage(); return; }
   if (currentTab === 'history')   { main.innerHTML = renderHistoryPage(); return; }
@@ -1580,6 +1775,13 @@ function renderMain() {
   if (currentTab === 'success')   { main.innerHTML = renderSuccessFormulaPage(); return; }
   if (currentTab === 'legacy')    { main.innerHTML = renderLegacyDashboardPage(); return; }
   if (currentTab === 'future')    { main.innerHTML = renderFuturePage(); return; }
+  if (currentTab === 'milestones') { main.innerHTML = renderMilestonesPage(null); return; }
+  if (currentTab && currentTab.startsWith('milestones__')) {
+    main.innerHTML = renderMilestonesPage(currentTab.replace('milestones__','')); return;
+  }
+  if (currentTab && currentTab.startsWith('journey__')) {
+    main.innerHTML = renderJourneyPage(currentTab.replace('journey__','')); return;
+  }
   if (currentTab === 'affirmations') { main.innerHTML = renderAffirmationsPage(); return; }
   if (currentTab === 'ask')       { main.innerHTML = renderAskClaudePage(); return; }
   if (currentTab === 'settings')  { main.innerHTML = renderSettingsPage(); return; }
@@ -1617,6 +1819,7 @@ function renderMain() {
         <div class="cat-dot" style="background:var(--c-${cat.color})"></div>
         <div class="cat-name">${cat.name}</div>
         <div class="cat-count">${doneCount}/${goals.length}</div>
+        <button class="subgroup-rename-btn" style="font-size:15px;opacity:0.8" onclick="setTab('milestones__${cat.id}')" title="View milestones for this category">🏅</button>
         <div class="cat-add-btn" onclick="openGoalModal(null,'${cat.id}')">+ Add</div>
       </div>`;
 
@@ -1642,6 +1845,7 @@ function renderMain() {
           <span class="subgroup-chevron ${collapsed?'':'open'}">▶</span>
           <span class="subgroup-title">${escapeHtml(sg.name)}</span>
           <span class="subgroup-meta">${sgDone}/${sgGoals.length}</span>
+          <button class="subgroup-rename-btn" onclick="event.stopPropagation();openJourneyPage('${cat.id}','${sg.id}')" title="View Journey">🏅</button>
           <button class="subgroup-rename-btn" onclick="event.stopPropagation();renameSubgroup('${cat.id}','${sg.id}')" title="Rename">✎</button>
           <button class="subgroup-rename-btn" style="color:var(--danger)" onclick="event.stopPropagation();deleteSubgroup('${cat.id}','${sg.id}')" title="Delete subgroup">✕</button>
         </div>`;
@@ -2123,6 +2327,7 @@ function openGoalModal(id = null, defaultCat = null) {
     document.getElementById('f-sc-first').value = g.deadline || todayKey();
     document.getElementById('f-sc-interval').value = 30;
     document.getElementById('f-sc-unit').value = 'days';
+    document.getElementById('f-milestone').checked = g.isMilestone || false;
     populateSubgroupSelect(g.category, g.subgroup);
   } else {
     document.getElementById('goalModalTitle').textContent = 'Add Goal';
@@ -2137,6 +2342,7 @@ function openGoalModal(id = null, defaultCat = null) {
     document.getElementById('f-scheduled').checked = false;
     document.getElementById('f-schedule-fields').style.display = 'none';
     document.getElementById('f-sc-first').value = todayKey();
+    document.getElementById('f-milestone').checked = false;
     populateSubgroupSelect(catId, null);
   }
   document.getElementById('goalModalOverlay').classList.add('show');
@@ -2214,6 +2420,7 @@ function saveGoal() {
     time: document.getElementById('f-time').value,
     points: parseInt(document.getElementById('f-points').value) || 0,
     isToday: document.getElementById('f-today').checked,
+    isMilestone: document.getElementById('f-milestone').checked,
     subgroup: subgroupVal || undefined,
   };
   if (!data.subgroup) delete data.subgroup;
@@ -2263,115 +2470,138 @@ async function deleteGoal(id) {
 // ═══════════════════════════════════════════════════════════════════
 // DASHBOARD (GitHub-style activity heatmap)
 // ═══════════════════════════════════════════════════════════════════
-function renderDashboardPage() {
-  const totalDone = state.goalHistory.length;
-  const totalActionsDone = Object.values(state.dailyLog).reduce((s,v)=>s+v, 0);
-  const activeDays = Object.keys(state.dailyLog).filter(k => state.dailyLog[k] > 0).length;
+// ═══════════════════════════════════════════════════════════════════
+// DASHBOARD — monthly scoped view. "Full Overview" shows all-time stats.
+// ═══════════════════════════════════════════════════════════════════
+let dashMonthOffset = 0; // 0 = current month, -1 = last month, etc.
 
-  // Streak calculation
+function getDashMonth() {
+  const now = new Date();
+  const d = new Date(now.getFullYear(), now.getMonth() + dashMonthOffset, 1);
+  return { year: d.getFullYear(), month: d.getMonth(), date: d };
+}
+
+function navDashMonth(delta) {
+  dashMonthOffset += delta;
+  if (dashMonthOffset > 0) dashMonthOffset = 0; // can't go to future months
+  renderMain();
+}
+
+function renderDashboardPage() {
+  const { year, month, date } = getDashMonth();
+  const now = new Date();
+  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth();
+  const monthName = date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  const monthStart = dateKey(new Date(year, month, 1));
+  const monthEnd = dateKey(new Date(year, month + 1, 0));
+
+  // Month stats
+  const goalsCompletedThisMonth = state.goalHistory.filter(g =>
+    !g.isWeeklyReviewReward && !g.isDestinyBonus && !g.isStreakBonus && !g.isMilestoneReward &&
+    g.completedDate >= monthStart && g.completedDate <= monthEnd
+  );
+  const actionsThisMonth = Object.keys(state.dailyLog)
+    .filter(k => k >= monthStart && k <= monthEnd)
+    .reduce((s,k) => s + (state.dailyLog[k]||0), 0);
+  const activeDaysThisMonth = Object.keys(state.dailyLog)
+    .filter(k => k >= monthStart && k <= monthEnd && state.dailyLog[k] > 0).length;
+  const ptsThisMonth = goalsCompletedThisMonth.reduce((s,g) => s + (g.points||0), 0);
+  const checkinsThisMonth = Object.keys(state.dailyCheckins)
+    .filter(k => k >= monthStart && k <= monthEnd && (state.dailyCheckins[k]?.morning || state.dailyCheckins[k]?.evening)).length;
+
+  // Current streak (always computed)
   let currentStreak = 0, longestStreak = 0, run = 0;
-  const cursor = new Date(new Date().toDateString());
+  const cur = new Date(new Date().toDateString());
   while (true) {
-    const key = dateKey(cursor);
-    if (state.dailyLog[key] > 0) { currentStreak++; cursor.setDate(cursor.getDate()-1); }
+    const key = dateKey(cur);
+    if (state.dailyLog[key] > 0) { currentStreak++; cur.setDate(cur.getDate()-1); }
     else break;
   }
-  // Longest streak across all logged days
   const allDates = Object.keys(state.dailyLog).filter(k=>state.dailyLog[k]>0).sort();
   let prevDate = null;
   allDates.forEach(dStr => {
-    const d = new Date(dStr);
-    if (prevDate && (d - prevDate) === 86400000) { run++; }
-    else { run = 1; }
-    longestStreak = Math.max(longestStreak, run);
-    prevDate = d;
+    const d = new Date(dStr); if (prevDate && (d-prevDate)===86400000) { run++; } else { run=1; }
+    longestStreak = Math.max(longestStreak, run); prevDate = d;
   });
-
-  // Award +10pts the first time the current streak exceeds the previous best, once per new record
   maybeAwardStreakRecord(currentStreak);
 
-  // ── ACTIVITY FIRST: today's summary + heatmap ──
-  const todayCount = state.dailyLog[todayKey()] || 0;
-  let html = `<div class="dash-stat-card" style="text-align:left;display:flex;align-items:center;gap:12px;margin-bottom:14px;cursor:pointer" onclick="showTodayBreakdown()">
-    <div style="font-size:28px">${todayCount > 0 ? '✅' : '⬜'}</div>
-    <div style="flex:1">
-      <div style="font-size:14px;font-weight:600;color:var(--ink)">${todayCount} action${todayCount!==1?'s':''} completed today</div>
-      <div style="font-size:12px;color:var(--ink3)">Tap to see what you did today</div>
+  // Month navigation header
+  let html = `<div class="cal-header" style="margin-bottom:14px">
+    <button class="cal-nav-btn" onclick="navDashMonth(-1)">‹</button>
+    <div style="text-align:center">
+      <div style="font-size:18px;font-weight:600;font-family:var(--serif)">${monthName}</div>
+      ${isCurrentMonth ? '<div style="font-size:11px;color:var(--accent);font-weight:600">Current Month</div>' : '<div style="font-size:11px;color:var(--ink3)">Past Month</div>'}
     </div>
-    <div style="color:var(--ink3)">›</div>
+    <button class="cal-nav-btn" onclick="navDashMonth(1)" ${isCurrentMonth?'disabled style="opacity:0.3"':''}>›</button>
   </div>`;
 
-  html += renderHeatmap();
-
-  // ── Stats + streaks ──
-  html += `<div class="dash-summary-row">
-    <div class="dash-stat-card"><div class="dash-stat-val">${totalDone}</div><div class="dash-stat-label">Goals Completed</div></div>
-    <div class="dash-stat-card"><div class="dash-stat-val">${totalActionsDone}</div><div class="dash-stat-label">Actions Done</div></div>
-    <div class="dash-stat-card"><div class="dash-stat-val">${activeDays}</div><div class="dash-stat-label">Active Days</div></div>
-  </div>`;
-
-  html += `<div class="streak-panel">
-    <div class="streak-item"><div class="streak-val">🔥 ${currentStreak}</div><div class="streak-label">Current Streak</div></div>
-    <div class="streak-item"><div class="streak-val">🏅 ${longestStreak}</div><div class="streak-label">Longest Streak</div></div>
-  </div>`;
-
-  html += renderDestinyScore();
-
-  // ── Category progress: MONTHLY, with month pills + year dropdown for scalability ──
-  const now = new Date();
-  if (!dashboardYear) dashboardYear = now.getFullYear();
-  if (dashboardMonth === null || dashboardMonth === undefined) dashboardMonth = now.getMonth();
-
-  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  const monthShort = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-  // Year dropdown: from the year the app was first installed (or 2024 fallback) through current year + 0
-  const installYear = state.firstInstalledDate ? new Date(state.firstInstalledDate).getFullYear() : now.getFullYear();
-  const earliestYear = Math.min(installYear, now.getFullYear());
-  const yearOptions = [];
-  for (let y = now.getFullYear(); y >= earliestYear; y--) yearOptions.push(y);
-
-  const isCurrentMonth = dashboardYear === now.getFullYear() && dashboardMonth === now.getMonth();
-
-  html += `<div class="cat-progress-panel">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
-      <div class="heatmap-title" style="margin-bottom:0">Progress by Category</div>
-      <select class="month-year-select" id="dashYearSelect" onchange="setDashboardYear(this.value)">
-        ${yearOptions.map(y => `<option value="${y}" ${y===dashboardYear?'selected':''}>${y}</option>`).join('')}
-      </select>
+  // Single stats bar — Goals, Actions, Days, Pts on one line
+  html += `<div class="dash-stat-bar" style="margin-bottom:${isCurrentMonth ? '8px' : '14px'}">
+    <div class="dash-stat-bar-item">
+      <div class="dash-stat-bar-val">${goalsCompletedThisMonth.length}</div>
+      <div class="dash-stat-bar-label">Goals</div>
     </div>
-    <div class="heatmap-sub" style="margin-bottom:10px">${isCurrentMonth ? 'This month — ' : ''}${monthNames[dashboardMonth]} ${dashboardYear}</div>
-    <div class="month-scroll-wrap" id="monthScrollWrap">
-      <div class="month-pill-row">
-        ${monthShort.map((m, i) => `<div class="month-pill ${i===dashboardMonth?'active':''}" onclick="setDashboardMonth(${i})">${m}</div>`).join('')}
+    <div class="dash-stat-bar-divider"></div>
+    <div class="dash-stat-bar-item">
+      <div class="dash-stat-bar-val">${actionsThisMonth}</div>
+      <div class="dash-stat-bar-label">Actions</div>
+    </div>
+    <div class="dash-stat-bar-divider"></div>
+    <div class="dash-stat-bar-item">
+      <div class="dash-stat-bar-val">${activeDaysThisMonth}</div>
+      <div class="dash-stat-bar-label">Days</div>
+    </div>
+    <div class="dash-stat-bar-divider"></div>
+    <div class="dash-stat-bar-item">
+      <div class="dash-stat-bar-val">⚡${ptsThisMonth}</div>
+      <div class="dash-stat-bar-label">Pts</div>
+    </div>
+  </div>`;
+
+  // Streak row — only for current month, sits directly beneath the stat bar
+  if (isCurrentMonth) {
+    html += `<div style="display:flex;gap:8px;margin-bottom:14px">
+      <div style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;display:flex;align-items:center;gap:8px;box-shadow:var(--shadow)">
+        <span style="font-size:16px">🔥</span>
+        <div><div style="font-size:14px;font-weight:700;font-family:var(--serif);color:var(--ink)">${currentStreak} day${currentStreak!==1?'s':''}</div><div style="font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:.3px">Current streak</div></div>
+      </div>
+      <div style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;display:flex;align-items:center;gap:8px;box-shadow:var(--shadow)">
+        <span style="font-size:16px">🏅</span>
+        <div><div style="font-size:14px;font-weight:700;font-family:var(--serif);color:var(--ink)">${longestStreak} day${longestStreak!==1?'s':''}</div><div style="font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:.3px">Best streak</div></div>
       </div>
     </div>`;
+  }
 
-  // Filter goalHistory completions to the selected month/year
-  const monthStart = dateKey(new Date(dashboardYear, dashboardMonth, 1));
-  const lastDay = new Date(dashboardYear, dashboardMonth + 1, 0).getDate();
-  const monthEnd = dateKey(new Date(dashboardYear, dashboardMonth, lastDay));
+  // Monthly activity grid — day boxes for the selected month
+  html += renderMonthActivityGrid(year, month, monthStart, monthEnd);
+
+  // Destiny Score — only for current month
+  if (isCurrentMonth) {
+    html += renderDestinyScore();
+  }
+
+  // Category progress — scoped to selected month, no separate selector needed
+  html += `<div class="cat-progress-panel">
+    <div class="heatmap-title" style="margin-bottom:6px">Progress by Category</div>
+    <div class="heatmap-sub" style="margin-bottom:10px">Goals with deadlines or start dates in ${date.toLocaleDateString('en-GB',{month:'long'})}</div>`;
 
   state.categories.forEach(cat => {
-    // Goals ALLOCATED to this month: goals whose startDate OR deadline falls in this month/year.
-    // If nothing is set for a category this month, it shows 0/0.
     const goalsForMonth = state.goals.filter(g =>
       g.category === cat.id &&
       ((g.startDate && g.startDate >= monthStart && g.startDate <= monthEnd) ||
        (g.deadline && g.deadline >= monthStart && g.deadline <= monthEnd))
     );
     const completedThisMonth = state.goalHistory.filter(g =>
-      g.category === cat.id && g.completedDate >= monthStart && g.completedDate <= monthEnd
+      g.category === cat.id && g.completedDate >= monthStart && g.completedDate <= monthEnd &&
+      !g.isWeeklyReviewReward && !g.isDestinyBonus && !g.isStreakBonus && !g.isMilestoneReward
     );
     const total = goalsForMonth.length + completedThisMonth.length;
     const done = completedThisMonth.length;
     const pct = total ? Math.round((done/total)*100) : 0;
-
     if (total === 0) {
-      // Nothing allocated this month for this category — show greyed out
-      html += `<div class="cat-progress-row" style="opacity:0.4">
+      html += `<div class="cat-progress-row" style="opacity:0.35">
         <div class="cat-progress-label"><span>${escapeHtml(cat.name)}</span><span style="color:var(--ink3)">—</span></div>
-        <div class="cat-progress-bg"><div class="cat-progress-fill" style="width:0%;background:var(--c-${cat.color})"></div></div>
+        <div class="cat-progress-bg"></div>
       </div>`;
     } else {
       html += `<div class="cat-progress-row">
@@ -2382,25 +2612,96 @@ function renderDashboardPage() {
   });
   html += `</div>`;
 
+  // Full Overview button
+  html += `<button class="btn btn-ghost" style="width:100%;margin-top:8px" onclick="setTab('overview')">📊 Full Overview (All-Time Stats)</button>`;
+
   return html;
 }
 
-function setDashboardYear(year) {
-  dashboardYear = parseInt(year);
-  renderMain();
+// Monthly day-intensity grid (replaces the 26-week heatmap on dashboard)
+function renderMonthActivityGrid(year, month, monthStart, monthEnd) {
+  const today = todayKey();
+  const firstDay = new Date(year, month, 1);
+  const lastDayNum = new Date(year, month + 1, 0).getDate();
+  const maxActivity = Math.max(1, ...Object.keys(state.dailyLog)
+    .filter(k => k >= monthStart && k <= monthEnd)
+    .map(k => state.dailyLog[k]||0));
+
+  let html = `<div class="heatmap-panel" style="margin-bottom:14px">
+    <div class="heatmap-title">Daily Activity</div>
+    <div class="heatmap-sub">This month — darker = more actions that day</div>
+    <div class="cal-grid" style="gap:4px;margin-top:10px">`;
+
+  // Day-of-week headers
+  ['S','M','T','W','T','F','S'].forEach(d => { html += `<div class="cal-dow">${d}</div>`; });
+
+  // Empty cells before first
+  for (let i = 0; i < firstDay.getDay(); i++) html += `<div class="cal-day empty"></div>`;
+
+  for (let d = 1; d <= lastDayNum; d++) {
+    const dKey = dateKey(new Date(year, month, d));
+    const count = state.dailyLog[dKey] || 0;
+    const intensity = count === 0 ? '' : count <= maxActivity * 0.25 ? 'l1' : count <= maxActivity * 0.5 ? 'l2' : count <= maxActivity * 0.75 ? 'l3' : 'l4';
+    const isToday = dKey === today;
+    html += `<div class="cal-day ${intensity?'has-tasks':''} ${isToday?'today':''}" style="position:relative" title="${count} actions">
+      <div class="cal-day-num">${d}</div>
+      ${intensity ? `<div class="heatmap-day ${intensity}" style="width:8px;height:8px;position:absolute;bottom:3px;border-radius:2px"></div>` : ''}
+    </div>`;
+  }
+
+  // Fill remaining
+  const totalCells = firstDay.getDay() + lastDayNum;
+  const rem = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+  for (let i = 0; i < rem; i++) html += `<div class="cal-day empty"></div>`;
+
+  html += `</div></div>`;
+  return html;
 }
 
-function setDashboardMonth(monthIdx) {
-  dashboardMonth = monthIdx;
-  renderMain();
-  setTimeout(() => {
-    const monthScroll = document.getElementById('monthScrollWrap');
-    if (monthScroll) {
-      const activePill = monthScroll.querySelector('.month-pill.active');
-      if (activePill && activePill.scrollIntoView) activePill.scrollIntoView({ behavior: 'instant', inline: 'center', block: 'nearest' });
-    }
-  }, 0);
+// Full all-time overview page (accessed via button from dashboard)
+function renderOverviewPage() {
+  const totalDone = state.goalHistory.filter(g => !g.isWeeklyReviewReward && !g.isDestinyBonus && !g.isStreakBonus && !g.isMilestoneReward).length;
+  const totalActionsDone = Object.values(state.dailyLog).reduce((s,v)=>s+v,0);
+  const activeDays = Object.keys(state.dailyLog).filter(k=>state.dailyLog[k]>0).length;
+
+  let currentStreak = 0, longestStreak = 0, run = 0;
+  const cur2 = new Date(new Date().toDateString());
+  while (true) {
+    const key = dateKey(cur2);
+    if (state.dailyLog[key]>0) { currentStreak++; cur2.setDate(cur2.getDate()-1); } else break;
+  }
+  const allDates2 = Object.keys(state.dailyLog).filter(k=>state.dailyLog[k]>0).sort();
+  let prevDate2 = null;
+  allDates2.forEach(dStr => {
+    const d = new Date(dStr); if (prevDate2 && (d-prevDate2)===86400000) run++; else run=1;
+    longestStreak = Math.max(longestStreak,run); prevDate2=d;
+  });
+
+  let html = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+    <button class="btn btn-ghost" style="padding:6px 10px" onclick="setTab('dashboard')">← Back</button>
+    <div class="heatmap-title" style="margin-bottom:0">📊 Full Overview</div>
+  </div>`;
+
+  html += `<div class="dash-summary-row" style="margin-bottom:14px">
+    <div class="dash-stat-card"><div class="dash-stat-val">${totalDone}</div><div class="dash-stat-label">Total Goals Done</div></div>
+    <div class="dash-stat-card"><div class="dash-stat-val">${totalActionsDone}</div><div class="dash-stat-label">Total Actions</div></div>
+    <div class="dash-stat-card"><div class="dash-stat-val">${activeDays}</div><div class="dash-stat-label">Active Days</div></div>
+  </div>`;
+
+  html += `<div class="streak-panel">
+    <div class="streak-item"><div class="streak-val">🔥 ${currentStreak}</div><div class="streak-label">Current Streak</div></div>
+    <div class="streak-item"><div class="streak-val">🏅 ${longestStreak}</div><div class="streak-label">Best Streak</div></div>
+  </div>`;
+
+  html += renderHeatmap(); // 26-week activity heatmap
+  html += renderLegacyDashboardPage();
+
+  return html;
 }
+
+function setDashboardYear(year) { dashboardYear = parseInt(year); renderMain(); }
+
+function setDashboardMonth(monthIdx) { dashboardMonth = monthIdx; renderMain(); }
 
 // ═══════════════════════════════════════════════════════════════════
 // DESTINY SCORE — measures alignment, not just task completion
@@ -2626,6 +2927,605 @@ function renderHeatmap() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// JOURNEY SYSTEM — milestone paths per subgroup
+// ═══════════════════════════════════════════════════════════════════
+
+function journeyKey(catId, sgId) { return catId + '__' + sgId; }
+
+function openJourneyPage(catId, sgId) {
+  setTab('journey__' + journeyKey(catId, sgId));
+}
+
+// Auto-suggest levels from existing goals in this subgroup
+function suggestJourneyLevels(cat, sg, sgGoals) {
+  if (!sgGoals.length) return [];
+  // Simple bucketing: split goals into ~3 groups by index
+  const third = Math.ceil(sgGoals.length / 3);
+  const buckets = [
+    { title: 'Foundation', desc: 'Getting started — the basics that everything else builds on.', goals: sgGoals.slice(0, third) },
+    { title: 'Build', desc: 'Deepening and expanding on your foundation.', goals: sgGoals.slice(third, third*2) },
+    { title: 'Mastery', desc: 'The advanced work — where real impact happens.', goals: sgGoals.slice(third*2) },
+  ].filter(b => b.goals.length);
+
+  return buckets.map((b, i) => ({
+    id: 0, // will be assigned on save
+    title: b.title,
+    desc: b.desc,
+    linkedGoalUids: b.goals.map(g => g.uid).filter(Boolean),
+    streakTarget: 0,
+    completedManually: false,
+    completedDate: null,
+    suggested: true,
+  }));
+}
+
+function getLevelStatus(level, catId) {
+  if (level.completedManually || level.completedDate) return 'complete';
+  // All linked goals done
+  const linkedGoals = level.linkedGoalUids.map(uid =>
+    state.goals.find(g => g.uid === uid) || state.goalHistory.find(g => g.uid === uid)
+  ).filter(Boolean);
+  if (linkedGoals.length && linkedGoals.every(g => g.done)) return 'complete';
+  // Streak target met
+  if (level.streakTarget && level.streakTarget > 0) {
+    if (computeCategoryStreak(catId) >= level.streakTarget) return 'complete';
+  }
+  // Scheduled goal occurrence target met — count completed instances in this category
+  if (level.occurrenceTarget && level.occurrenceTarget > 0) {
+    const completedInstances = state.goalHistory.filter(g => g.category === catId && g.scheduledId).length;
+    if (completedInstances >= level.occurrenceTarget) return 'complete';
+  }
+  return 'active';
+}
+
+function computeCategoryStreak(catId) {
+  // Count consecutive days where at least one goal in this category had activity
+  let streak = 0;
+  const cursor = new Date(new Date().toDateString());
+  while (streak < 365) {
+    const key = dateKey(cursor);
+    const hadActivity = state.goals.filter(g => g.category === catId).some(g =>
+      (g.actions||[]).some(a => a.recurring && a.occurrences && a.occurrences.find(o => o.date === key && o.done))
+    );
+    if (!hadActivity) break;
+    streak++;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return streak;
+}
+
+function getLevelProgress(level) {
+  if (!level.linkedGoalUids.length) return { done: 0, total: 0, pct: 0 };
+  const linked = level.linkedGoalUids.map(uid =>
+    state.goals.find(g => g.uid === uid) || state.goalHistory.find(g => g.uid === uid)
+  ).filter(Boolean);
+  const done = linked.filter(g => g.done).length;
+  return { done, total: linked.length, pct: linked.length ? Math.round((done/linked.length)*100) : 0 };
+}
+
+let editingJourneyKey = null;
+let editingJourneyLevelIdx = null;
+let journeyPendingLevels = null; // staging area while editing the journey setup
+
+function renderJourneyPage(jKey) {
+  const [catId, sgId] = jKey.split('__');
+  const cat = state.categories.find(c => c.id === catId);
+  const sg = cat?.subgroups?.find(s => s.id === sgId);
+  if (!cat || !sg) return `<div class="empty-state"><p>Journey not found.</p><button class="btn btn-ghost" onclick="history.back()">← Back</button></div>`;
+
+  if (!state.journeys) state.journeys = {};
+  let journey = state.journeys[jKey];
+
+  // If no journey exists yet, auto-suggest and save suggested levels
+  if (!journey) {
+    const sgGoals = state.goals.filter(g => g.category === catId && g.subgroup === sgId);
+    const suggested = suggestJourneyLevels(cat, sg, sgGoals);
+    journey = { levels: suggested.map((l,i) => ({
+      ...l, id: state.nextJourneyLevelId++,
+    })) };
+    state.journeys[jKey] = journey;
+    saveState();
+  }
+
+  const levels = journey.levels || [];
+  const catColor = `var(--c-${cat.color})`;
+  const categoryStreak = computeCategoryStreak(catId);
+
+  // Compute level statuses in order — a level is only "active" if all prior are complete
+  const statuses = [];
+  let lastCompletedIdx = -1;
+  levels.forEach((lv, i) => {
+    const s = getLevelStatus(lv, catId);
+    if (s === 'complete') lastCompletedIdx = i;
+    statuses.push(s);
+  });
+  // Re-lock anything after the first non-complete
+  let foundActive = false;
+  for (let i = 0; i < statuses.length; i++) {
+    if (statuses[i] === 'complete') continue;
+    if (!foundActive) { statuses[i] = 'active'; foundActive = true; }
+    else { statuses[i] = 'locked'; }
+  }
+
+  const completedCount = statuses.filter(s => s === 'complete').length;
+  const totalLevels = levels.length;
+
+  // Back button + header
+  let html = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+    <button class="btn btn-ghost" style="padding:6px 10px" onclick="setTab('${catId}')">← Back</button>
+    <div>
+      <div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.5px">${escapeHtml(cat.name)}</div>
+      <div class="journey-page-title">${escapeHtml(sg.name)}</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">
+    <div class="cat-progress-bg" style="flex:1;height:7px"><div class="cat-progress-fill" style="width:${totalLevels?Math.round((completedCount/totalLevels)*100):0}%;background:${catColor}"></div></div>
+    <div style="font-size:12px;color:var(--ink3);white-space:nowrap">${completedCount}/${totalLevels} levels</div>
+  </div>`;
+
+  if (categoryStreak > 0) {
+    html += `<div style="font-size:12px;color:var(--c-health);font-weight:600;margin-bottom:14px">🔥 ${categoryStreak}-day streak in this area</div>`;
+  }
+
+  if (!levels.length) {
+    html += `<div class="empty-state"><div class="icon">🗺️</div><p>No levels yet. Add your first level below to start building your journey.</p></div>`;
+  } else {
+    html += `<div class="journey-path">`;
+    levels.forEach((lv, i) => {
+      const status = statuses[i];
+      const progress = getLevelProgress(lv);
+      const badge = status === 'complete' ? '<span class="journey-level-badge badge-complete">✓ Complete</span>'
+                  : status === 'active'   ? '<span class="journey-level-badge badge-active">● In Progress</span>'
+                  :                         '<span class="journey-level-badge badge-locked">🔒 Locked</span>';
+
+      html += `<div class="journey-level ${status}">
+        <div class="journey-level-dot"></div>
+        <div class="journey-level-card">
+          <div class="journey-level-header">
+            <div>
+              <div class="journey-level-num">Level ${i+1}</div>
+              <div class="journey-level-title">${escapeHtml(lv.title)}</div>
+            </div>
+            ${badge}
+          </div>`;
+
+      if (lv.desc) html += `<div class="journey-level-desc">${escapeHtml(lv.desc)}</div>`;
+
+      // Linked goals as chips
+      if (lv.linkedGoalUids && lv.linkedGoalUids.length) {
+        html += `<div style="margin-bottom:8px">`;
+        lv.linkedGoalUids.forEach(uid => {
+          const g = state.goals.find(x => x.uid === uid) || state.goalHistory.find(x => x.uid === uid);
+          if (!g) return;
+          html += `<span class="journey-goal-chip ${g.done?'done':''}" onclick="${g.done?'':(`setTab('${catId}')`)}">${g.done?'✓ ':''} ${escapeHtml(g.title)}</span>`;
+        });
+        html += `</div>`;
+      }
+
+      // Streak target chip
+      if (lv.streakTarget > 0) {
+        const met = categoryStreak >= lv.streakTarget;
+        html += `<span class="journey-goal-chip streak">${met?'✓':('🔥')} ${lv.streakTarget}-day streak ${met?'achieved!':'milestone'}</span>`;
+      }
+
+      // Progress bar (only for active levels with linked goals)
+      if (status === 'active' && progress.total > 0) {
+        html += `<div class="journey-progress-row">
+          <div class="journey-progress-bg"><div class="journey-progress-fill" style="width:${progress.pct}%;background:${catColor}"></div></div>
+          <div class="journey-progress-text">${progress.done}/${progress.total} goals</div>
+        </div>`;
+      }
+
+      // Action buttons
+      html += `<div class="journey-actions-row">`;
+      if (status !== 'complete') {
+        html += `<button class="btn btn-primary" style="font-size:12px;padding:6px 12px" onclick="markJourneyLevelComplete('${jKey}',${i})">Mark Complete</button>`;
+      } else {
+        html += `<button class="btn btn-ghost" style="font-size:11px;padding:5px 10px" onclick="unmarkJourneyLevelComplete('${jKey}',${i})">↩ Undo</button>`;
+      }
+      if (status !== 'locked') {
+        html += `<button class="btn btn-ghost" style="font-size:11px;padding:5px 10px" onclick="openEditJourneyLevel('${jKey}',${i})">✎ Edit</button>`;
+      }
+      html += `<button class="btn btn-ghost" style="font-size:11px;padding:5px 10px;color:var(--danger)" onclick="deleteJourneyLevel('${jKey}',${i})">✕</button>`;
+      html += `</div></div></div>`; // close card + level
+    });
+    html += `</div>`; // close journey-path
+  }
+
+  // Manage goals link + Add level button
+  html += `<div style="margin-top:20px;display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn btn-primary" style="flex:1" onclick="openAddJourneyLevel('${jKey}','${catId}','${sgId}')">+ Add Level</button>
+    <button class="btn btn-ghost" style="flex:1" onclick="openLinkGoalsToLevel('${jKey}')">🎯 Link Goals</button>
+  </div>`;
+
+  return html;
+}
+
+function markJourneyLevelComplete(jKey, idx) {
+  const levels = state.journeys[jKey].levels;
+  const lv = levels[idx];
+  lv.completedManually = true;
+  lv.completedDate = todayKey();
+
+  // Award tiered points
+  const pts = lv.tier || 25;
+  const [catId, sgId] = jKey.split('__');
+  const cat = state.categories.find(c => c.id === catId);
+  const sg = cat?.subgroups?.find(s => s.id === sgId);
+  const lvLabel = sg ? `${sg.name}: Level ${idx+1} — ${lv.title}` : `Level ${idx+1} — ${lv.title}`;
+
+  state.goalHistory.push({
+    id: state.nextGoalId++, uid: newUID(),
+    title: `🏅 ${lvLabel}`,
+    category: catId,
+    deadline: todayKey(), completedDate: todayKey(),
+    points: pts, done: true, actions: [], isMilestoneReward: true,
+  });
+
+  // Auto-pin as milestone
+  pinAsMilestone(`journey-${jKey}-${idx}`, lvLabel, todayKey(), catId);
+
+  saveState();
+
+  // Show celebration overlay
+  showMilestoneCelebration(lv.title, pts, cat, idx);
+
+  renderMain();
+}
+
+function showMilestoneCelebration(levelTitle, pts, cat, levelIdx) {
+  const tierLabel = pts >= 50 ? '🥇 Big Milestone' : pts >= 25 ? '🥈 Milestone' : '🥉 Small Milestone';
+  const emoji = pts >= 50 ? '🎉' : pts >= 25 ? '🏆' : '⭐';
+  // Reuse the completion overlay with milestone styling
+  document.getElementById('completionEmoji').textContent = emoji;
+  document.getElementById('completionTitle').textContent = levelTitle;
+  document.getElementById('completionSub').textContent = cat ? `${cat.name} journey` : 'Journey milestone achieved';
+  document.getElementById('completionList').innerHTML = `
+    <div class="completion-list-item" style="font-size:14px;font-weight:600;color:var(--accent)">+${pts} pts earned!</div>
+    <div class="completion-list-item" style="color:var(--ink3)">${tierLabel}</div>
+    <div class="completion-list-item" style="color:var(--ink3);font-size:12px">Pinned to your Milestones page</div>
+  `;
+  document.getElementById('completionPts').textContent = '';
+  document.getElementById('completionOverlay').classList.add('show');
+}
+
+function unmarkJourneyLevelComplete(jKey, idx) {
+  const levels = state.journeys[jKey].levels;
+  levels[idx].completedManually = false;
+  levels[idx].completedDate = null;
+  saveState(); renderMain();
+}
+
+let editJourneyKey = null, editJourneyLevelIdx = null;
+
+function openAddJourneyLevel(jKey, catId, sgId) {
+  editJourneyKey = jKey;
+  editJourneyLevelIdx = null;
+  document.getElementById('journeyLevelModalTitle').textContent = 'Add Level';
+  document.getElementById('jl-title').value = '';
+  document.getElementById('jl-desc').value = '';
+  document.getElementById('jl-streak').value = '';
+  document.getElementById('jl-occurrences').value = '';
+  document.getElementById('jl-tier').value = '25';
+  document.getElementById('journeyLevelModalOverlay').classList.add('show');
+  setTimeout(() => document.getElementById('jl-title').focus(), 100);
+}
+
+function openEditJourneyLevel(jKey, idx) {
+  editJourneyKey = jKey;
+  editJourneyLevelIdx = idx;
+  const lv = state.journeys[jKey].levels[idx];
+  document.getElementById('journeyLevelModalTitle').textContent = 'Edit Level';
+  document.getElementById('jl-title').value = lv.title;
+  document.getElementById('jl-desc').value = lv.desc || '';
+  document.getElementById('jl-streak').value = lv.streakTarget || '';
+  document.getElementById('jl-occurrences').value = lv.occurrenceTarget || '';
+  document.getElementById('jl-tier').value = lv.tier || 25;
+  document.getElementById('journeyLevelModalOverlay').classList.add('show');
+  setTimeout(() => document.getElementById('jl-title').focus(), 100);
+}
+
+function saveJourneyLevel() {
+  const title = document.getElementById('jl-title').value.trim();
+  if (!title) { showToast('Please enter a title'); return; }
+  if (!state.journeys[editJourneyKey]) state.journeys[editJourneyKey] = { levels: [] };
+  const levels = state.journeys[editJourneyKey].levels;
+  const streakVal = parseInt(document.getElementById('jl-streak').value) || 0;
+  const occurrenceVal = parseInt(document.getElementById('jl-occurrences').value) || 0;
+  const tier = parseInt(document.getElementById('jl-tier').value) || 25;
+
+  if (editJourneyLevelIdx !== null) {
+    Object.assign(levels[editJourneyLevelIdx], {
+      title, desc: document.getElementById('jl-desc').value.trim(),
+      streakTarget: streakVal, occurrenceTarget: occurrenceVal, tier,
+    });
+  } else {
+    levels.push({
+      id: state.nextJourneyLevelId++, title,
+      desc: document.getElementById('jl-desc').value.trim(),
+      linkedGoalUids: [], streakTarget: streakVal,
+      occurrenceTarget: occurrenceVal, tier,
+      completedManually: false, completedDate: null,
+    });
+  }
+  saveState();
+  closeModal('journeyLevelModalOverlay');
+  renderMain();
+  showToast('✓ Level saved');
+}
+
+async function deleteJourneyLevel(jKey, idx) {
+  const ok = await appConfirm('Remove this level from the journey?', 'Delete level?', 'Delete');
+  if (!ok) return;
+  state.journeys[jKey].levels.splice(idx, 1);
+  saveState(); renderMain();
+}
+
+// Link Goals to a level — opens a checklist of subgroup goals
+function openLinkGoalsToLevel(jKey) {
+  const [catId, sgId] = jKey.split('__');
+  const sg = state.categories.find(c=>c.id===catId)?.subgroups?.find(s=>s.id===sgId);
+  const sgGoals = state.goals.filter(g => g.category === catId && g.subgroup === sgId);
+  const journey = state.journeys[jKey];
+  if (!journey || !journey.levels.length) { showToast('Add levels first'); return; }
+
+  // Build a simple modal-like approach using the existing appConfirm pattern
+  // For now: auto-distribute unlinked goals across levels evenly
+  const allLinkedUids = new Set(journey.levels.flatMap(l => l.linkedGoalUids));
+  const unlinked = sgGoals.filter(g => g.uid && !allLinkedUids.has(g.uid));
+  if (!unlinked.length) { showToast('All goals in this subgroup are already linked to levels'); return; }
+
+  // Distribute unlinked goals across levels that need them
+  unlinked.forEach((g, i) => {
+    const targetLevel = journey.levels[i % journey.levels.length];
+    if (g.uid) targetLevel.linkedGoalUids.push(g.uid);
+  });
+  saveState(); renderMain();
+  showToast(`✓ Linked ${unlinked.length} goal${unlinked.length!==1?'s':''} to levels`);
+}
+
+// Check scheduled goal completion counts for streak milestones
+function checkScheduledMilestones() {
+  if (!state.journeys) return;
+  Object.entries(state.journeys).forEach(([jKey, journey]) => {
+    const [catId] = jKey.split('__');
+    const streak = computeCategoryStreak(catId);
+    (journey.levels||[]).forEach((lv, idx) => {
+      if (lv.streakTarget && streak >= lv.streakTarget && !lv.completedDate && !lv.completedManually) {
+        markJourneyLevelComplete(jKey, idx);
+      }
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MILESTONES & WINS
+// ═══════════════════════════════════════════════════════════════════
+
+function pinAsMilestone(uid, title, completedDate, catId) {
+  if (!state.milestones) state.milestones = [];
+  if (!state.nextMilestoneId) state.nextMilestoneId = 1;
+  const already = state.milestones.find(m => m.sourceUid === String(uid));
+  if (already) { showToast('Already pinned as a milestone'); return; }
+  state.milestones.push({
+    id: state.nextMilestoneId++, uid: newUID(), sourceUid: String(uid),
+    title, completedDate: completedDate || todayKey(),
+    category: catId, note: '', pinDate: todayKey(), isManual: false,
+  });
+  saveState(); renderMain(); showToast('🏅 Pinned as a milestone');
+}
+
+let milestoneFilterCat = 'all';
+
+function renderMilestonesPage(filterCatId = null) {
+  if (!state.milestones) state.milestones = [];
+  if (!state.nextMilestoneId) state.nextMilestoneId = 1;
+  const lockedCat = filterCatId || null;
+  const activeCat = lockedCat || milestoneFilterCat;
+  const cat = lockedCat ? state.categories.find(c => c.id === lockedCat) : null;
+  const pinnedUids = new Set(state.milestones.map(m => m.sourceUid));
+  const recentCompleted = [...state.goalHistory]
+    .filter(g => !g.isWeeklyReviewReward && !g.isDestinyBonus && !g.isStreakBonus && !g.discarded && !g.isMilestoneReward)
+    .sort((a,b) => (b.completedDate||'').localeCompare(a.completedDate||''))
+    .slice(0, 30);
+
+  let html = '';
+
+  if (lockedCat && cat) {
+    html += `<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <button class="btn btn-ghost" style="padding:6px 10px" onclick="setTab('${lockedCat}')">← Back</button>
+      <div>
+        <div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.5px">Milestones</div>
+        <div class="journey-page-title">${escapeHtml(cat.name)}</div>
+      </div>
+    </div>`;
+  } else {
+    html += `<div class="heatmap-title" style="margin-bottom:4px">🏅 Milestones & Wins</div>
+    <div class="heatmap-sub" style="margin-bottom:12px">Evidence that you're moving. Pin completions that matter, add notes, or record milestones manually.</div>`;
+  }
+
+  html += `<button class="btn btn-primary" style="width:100%;margin-bottom:14px" onclick="openAddMilestoneModal()">+ Add Milestone Manually</button>`;
+
+  if (!lockedCat) {
+    html += `<div class="cat-pills-row" style="display:flex;margin:0 -14px 14px;padding:0 14px 10px;border-bottom:1px solid var(--border)">
+      <div class="cat-pill ${milestoneFilterCat==='all'?'active':''}" onclick="setMilestoneFilter('all')">All</div>
+      ${state.categories.map(c => `<div class="cat-pill ${milestoneFilterCat===c.id?'active':''}" onclick="setMilestoneFilter('${c.id}')" style="${milestoneFilterCat===c.id?`background:var(--c-${c.color});border-color:var(--c-${c.color})`:''}">${escapeHtml(c.name)}</div>`).join('')}
+    </div>`;
+  }
+
+  // Journey progress for this category
+  if (lockedCat && state.journeys && cat) {
+    const catJourneys = Object.entries(state.journeys).filter(([k]) => k.startsWith(lockedCat + '__'));
+    if (catJourneys.length) {
+      html += `<div class="heatmap-title" style="margin-bottom:4px">🗺️ My Journeys</div><div class="heatmap-sub" style="margin-bottom:10px">Milestone paths you've set up — tap one to see your level progress.</div>`;
+      catJourneys.forEach(([jKey, journey]) => {
+        const [, sgId] = jKey.split('__');
+        const sg = cat.subgroups?.find(s => s.id === sgId);
+        if (!sg || !journey.levels.length) return;
+        const completedLvs = journey.levels.filter(lv => lv.completedManually || lv.completedDate).length;
+        const pct = journey.levels.length ? Math.round(completedLvs/journey.levels.length*100) : 0;
+        html += `<div class="milestone-card" style="cursor:pointer" onclick="setTab('journey__${jKey}')">
+          <div class="milestone-top">
+            <div class="milestone-icon">🗺️</div>
+            <div class="milestone-body">
+              <div class="milestone-title">${escapeHtml(sg.name)}</div>
+              <div class="milestone-date">${completedLvs}/${journey.levels.length} levels complete</div>
+              <div class="cat-progress-bg" style="margin-top:6px"><div class="cat-progress-fill" style="width:${pct}%;background:var(--c-${cat.color})"></div></div>
+            </div>
+            <div style="font-size:20px">›</div>
+          </div>
+        </div>`;
+      });
+    }
+  }
+
+  // Milestone-flagged goals
+  const milestoneFlaggedGoals = [...state.goals, ...state.goalHistory].filter(g =>
+    g.isMilestone && (activeCat === 'all' || g.category === activeCat)
+  );
+  if (milestoneFlaggedGoals.length) {
+    html += `<div class="heatmap-title" style="margin-bottom:4px;margin-top:14px">🎯 Goals I'm Watching</div><div class="heatmap-sub" style="margin-bottom:8px">Goals you flagged as important milestones in your life.</div>`;
+    milestoneFlaggedGoals.forEach(g => {
+      const catObj = state.categories.find(c => c.id === g.category);
+      const dl = g.completedDate ? `Completed ${new Date(g.completedDate).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}` : g.deadline ? `Due ${new Date(g.deadline).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}` : 'In progress';
+      html += `<div class="milestone-card ${g.done?'milestone-pinned':''}">
+        <div class="milestone-top">
+          <div class="milestone-icon">${g.done?'✅':'🎯'}</div>
+          <div class="milestone-body">
+            <div class="milestone-title">${escapeHtml(g.title)}</div>
+            <div class="milestone-date">${dl}</div>
+            ${catObj?`<span class="milestone-cat-tag" style="background:var(--c-${catObj.color}-l);color:var(--c-${catObj.color})">${escapeHtml(catObj.name)}</span>`:''}
+          </div>
+        </div>
+      </div>`;
+    });
+  }
+
+  // Pinned milestones
+  const filteredPinned = state.milestones
+    .filter(m => activeCat === 'all' || m.category === activeCat)
+    .sort((a,b) => (b.completedDate||b.pinDate||'').localeCompare(a.completedDate||a.pinDate||'')); 
+  if (filteredPinned.length) {
+    html += `<div class="heatmap-title" style="margin-bottom:4px;margin-top:14px">🏆 Wins I've Pinned (${filteredPinned.length})</div><div class="heatmap-sub" style="margin-bottom:10px">Completions worth remembering — your evidence of growth.</div>`;
+    filteredPinned.forEach(m => {
+      const catObj = state.categories.find(c => c.id === m.category);
+      const dl = m.completedDate ? new Date(m.completedDate).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '';
+      html += `<div class="milestone-card milestone-pinned">
+        <div class="milestone-top">
+          <div class="milestone-icon">${m.isManual?'✍️':'🎯'}</div>
+          <div class="milestone-body">
+            <div class="milestone-title">${escapeHtml(m.title)}</div>
+            <div class="milestone-date">${dl}</div>
+            ${catObj?`<span class="milestone-cat-tag" style="background:var(--c-${catObj.color}-l);color:var(--c-${catObj.color})">${escapeHtml(catObj.name)}</span>`:''}
+            ${m.note?`<div class="milestone-note">"${escapeHtml(m.note)}"</div>`:''}
+          </div>
+          <div class="goal-actions">
+            <button onclick="editMilestoneNote(${m.id})" title="Edit note">✎</button>
+            <button class="del-btn" onclick="deleteMilestone(${m.id})" title="Unpin">✕</button>
+          </div>
+        </div>
+      </div>`;
+    });
+  } else if (!milestoneFlaggedGoals.length && !lockedCat) {
+    html += `<div class="heatmap-sub" style="margin-bottom:14px">No pinned milestones yet — pin completions from History, or add one manually above.</div>`;
+  }
+
+  // Recent completions (unpinned)
+  const filteredCompleted = recentCompleted.filter(g =>
+    !pinnedUids.has(String(g.uid||g.id)) && (activeCat === 'all' || g.category === activeCat)
+  );
+  if (filteredCompleted.length) {
+  // ── ACHIEVED JOURNEY MILESTONES timeline ──
+  const achievedLevels = [];
+  if (state.journeys) {
+    Object.entries(state.journeys).forEach(([jKey, journey]) => {
+      const [catId, sgId] = jKey.split('__');
+      const cat2 = state.categories.find(c => c.id === catId);
+      const sg = cat2?.subgroups?.find(s => s.id === sgId);
+      (journey.levels||[]).forEach((lv, idx) => {
+        if ((lv.completedManually || lv.completedDate) && (activeCat === 'all' || catId === activeCat)) {
+          achievedLevels.push({ lv, idx, cat2, sg, catId });
+        }
+      });
+    });
+  }
+  achievedLevels.sort((a,b) => (b.lv.completedDate||'').localeCompare(a.lv.completedDate||''));
+
+  if (achievedLevels.length) {
+    html += `<div class="heatmap-title" style="margin:16px 0 4px">🎖️ Milestones Achieved</div>
+    <div class="heatmap-sub" style="margin-bottom:10px">Every journey level you've completed — your proof of progress over time.</div>`;
+    achievedLevels.forEach(({ lv, idx, cat2, sg }) => {
+      const pts = lv.tier || 25;
+      const tierLabel = pts >= 50 ? '🥇 Big' : pts >= 25 ? '🥈 Medium' : '🥉 Small';
+      const dl = lv.completedDate ? new Date(lv.completedDate).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : 'Achieved';
+      html += `<div class="milestone-card milestone-pinned">
+        <div class="milestone-top">
+          <div class="milestone-icon">${pts >= 50 ? '🎉' : pts >= 25 ? '🏆' : '⭐'}</div>
+          <div class="milestone-body">
+            <div class="milestone-title">${sg ? escapeHtml(sg.name) : ''}: Level ${idx+1} — ${escapeHtml(lv.title)}</div>
+            <div class="milestone-date">${dl} · ${tierLabel} · +${pts}pts</div>
+            ${cat2 ? `<span class="milestone-cat-tag" style="background:var(--c-${cat2.color}-l);color:var(--c-${cat2.color})">${escapeHtml(cat2.name)}</span>` : ''}
+            ${lv.desc ? `<div class="milestone-note">"${escapeHtml(lv.desc)}"</div>` : ''}
+          </div>
+        </div>
+      </div>`;
+    });
+  }
+
+    html += `<div class="heatmap-title" style="margin:16px 0 6px">✅ Recent Completions</div>
+    <div class="heatmap-sub" style="margin-bottom:10px">Pin the ones worth remembering.</div>`;
+    filteredCompleted.slice(0,15).forEach(g => {
+      const catObj = state.categories.find(c => c.id === g.category);
+      const dl = g.completedDate ? new Date(g.completedDate).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '';
+      const safeTitle = escapeHtml(g.title).replace(/'/g, "\\'");
+      html += `<div class="milestone-card">
+        <div class="milestone-top">
+          <div class="milestone-icon">✅</div>
+          <div class="milestone-body">
+            <div class="milestone-title">${escapeHtml(g.title)}</div>
+            <div class="milestone-date">${dl}</div>
+            ${catObj?`<span class="milestone-cat-tag" style="background:var(--c-${catObj.color}-l);color:var(--c-${catObj.color})">${escapeHtml(catObj.name)}</span>`:''}
+          </div>
+          <button class="btn btn-ghost" style="font-size:11px;padding:5px 10px;flex-shrink:0" onclick="pinAsMilestone('${g.uid||g.id}','${safeTitle}','${g.completedDate||''}','${g.category||''}')">🏅 Pin</button>
+        </div>
+      </div>`;
+    });
+  }
+  return html;
+}
+
+function setMilestoneFilter(catId) { milestoneFilterCat = catId; renderMain(); }
+
+function openAddMilestoneModal() {
+  if (!state.milestones) state.milestones = [];
+  if (!state.nextMilestoneId) state.nextMilestoneId = 1;
+  const title = prompt('What milestone would you like to record?');
+  if (!title || !title.trim()) return;
+  const note = prompt('A note about what this means? (optional)') || '';
+  state.milestones.push({
+    id: state.nextMilestoneId++, uid: newUID(), sourceUid: null,
+    title: title.trim(), completedDate: todayKey(),
+    category: state.categories[0]?.id || '', note: note.trim(),
+    pinDate: todayKey(), isManual: true,
+  });
+  saveState(); renderMain(); showToast('🏅 Milestone added');
+}
+
+function editMilestoneNote(id) {
+  const m = state.milestones.find(x => x.id === id);
+  const note = prompt('Note for this milestone:', m.note || '');
+  if (note === null) return;
+  m.note = note.trim(); saveState(); renderMain();
+}
+
+async function deleteMilestone(id) {
+  const ok = await appConfirm('Remove this milestone? The completed goal stays in History.','Unpin?','Remove');
+  if (!ok) return;
+  state.milestones = state.milestones.filter(x => x.id !== id);
+  saveState(); renderMain();
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // HISTORY PAGE
 // ═══════════════════════════════════════════════════════════════════
 let historyFilter = 'all';
@@ -2667,6 +3567,7 @@ function renderHistoryPage() {
         </div>
         <div class="history-actions">
           <button onclick="duplicateGoal(${g.id})">⧉ Reuse</button>
+          <button onclick="pinAsMilestone('${g.uid||g.id}','${escapeHtml(g.title).replace(/'/g,"\\'")}','${g.completedDate||''}','${g.category||''}')" title="Pin as milestone">🏅 Pin</button>
         </div>
       </div>
     </div>`;
@@ -2843,14 +3744,35 @@ function isForToday(g) {
 }
 
 function isGoalInRange(g, rangeStart, rangeEnd) {
-  // Appears in range if:
   // 1. Deadline falls within range
   if (g.deadline && g.deadline >= rangeStart && g.deadline <= rangeEnd) return true;
   // 2. Spanning goal: startDate ≤ rangeEnd AND deadline ≥ rangeStart (overlaps the window)
   if (g.startDate && g.deadline && g.startDate <= rangeEnd && g.deadline >= rangeStart) return true;
   // 3. isToday flag when range includes today
   if (g.isToday && rangeStart <= todayKey() && rangeEnd >= todayKey()) return true;
+  // 4. Scheduled instances: scheduledDue falls within range
+  // (spawned goals have startDate === deadline === scheduledDue, already covered by #1,
+  //  but also check scheduledDue directly for safety)
+  if (g.scheduledDue && g.scheduledDue >= rangeStart && g.scheduledDue <= rangeEnd) return true;
   return false;
+}
+
+// Returns all goals/actions relevant to a given date range as a flat list
+// Used by both the horizon views and the monthly calendar
+function getItemsInRange(rangeStart, rangeEnd) {
+  const items = [];
+  state.goals.forEach(g => {
+    if (g.done) return;
+    const goalInRange = isGoalInRange(g, rangeStart, rangeEnd);
+    const actionsInRange = (g.actions||[]).filter(a => {
+      if (a.recurring && a.occurrences) return a.occurrences.some(o => o.date >= rangeStart && o.date <= rangeEnd);
+      return !a.done && a.deadline && a.deadline >= rangeStart && a.deadline <= rangeEnd;
+    });
+    if (goalInRange || actionsInRange.length) {
+      items.push({ goal: g, actions: actionsInRange, showGoal: goalInRange && !actionsInRange.length });
+    }
+  });
+  return items;
 }
 
 // Horizon definitions: id, label, and how many days ahead the window extends (inclusive of today)
@@ -2863,10 +3785,147 @@ const TASK_HORIZONS = [
   { id: '6months',  label: '6 Months',  days: 182 },
 ];
 let taskHorizon = 'today';
+let calendarMonth = new Date().getMonth();
+let calendarYear = new Date().getFullYear();
+let calendarSelectedDay = null; // dateKey of tapped day
 
 function setTaskHorizon(id) {
   taskHorizon = id;
+  calendarSelectedDay = null;
+  if (id === 'month') {
+    // Always reset to current month when switching to calendar
+    calendarMonth = new Date().getMonth();
+    calendarYear = new Date().getFullYear();
+  }
   renderMain();
+}
+
+function navCalendar(delta) {
+  calendarMonth += delta;
+  if (calendarMonth > 11) { calendarMonth = 0; calendarYear++; }
+  if (calendarMonth < 0) { calendarMonth = 11; calendarYear--; }
+  calendarSelectedDay = null;
+  renderMain();
+}
+
+function selectCalDay(dateKeyStr) {
+  calendarSelectedDay = calendarSelectedDay === dateKeyStr ? null : dateKeyStr;
+  renderMain();
+}
+
+function renderMonthCalendar() {
+  const today = todayKey();
+  const firstDay = new Date(calendarYear, calendarMonth, 1);
+  const lastDay = new Date(calendarYear, calendarMonth + 1, 0);
+  const monthStart = dateKey(firstDay);
+  const monthEnd = dateKey(lastDay);
+  const monthName = firstDay.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+
+  // Build a map of dateKey -> task count for the month
+  const dayTaskMap = {}; // dateKey -> { count, hasScheduled, items[] }
+  state.goals.forEach(g => {
+    if (g.done) return;
+    const isScheduled = !!g.scheduledId;
+    // Goal with deadline in this month
+    if (g.deadline && g.deadline >= monthStart && g.deadline <= monthEnd) {
+      if (!dayTaskMap[g.deadline]) dayTaskMap[g.deadline] = { count:0, hasScheduled:false, items:[] };
+      dayTaskMap[g.deadline].count++;
+      dayTaskMap[g.deadline].items.push({ goal:g, actionText:null });
+      if (isScheduled) dayTaskMap[g.deadline].hasScheduled = true;
+    }
+    // Actions with deadline in this month
+    (g.actions||[]).forEach(a => {
+      if (a.recurring && a.occurrences) {
+        a.occurrences.filter(o => o.date >= monthStart && o.date <= monthEnd && !o.done).forEach(occ => {
+          if (!dayTaskMap[occ.date]) dayTaskMap[occ.date] = { count:0, hasScheduled:false, items:[] };
+          dayTaskMap[occ.date].count++;
+          dayTaskMap[occ.date].items.push({ goal:g, actionText:a.text, occDate:occ.date, actionId:a.id });
+        });
+      } else if (!a.done && a.deadline && a.deadline >= monthStart && a.deadline <= monthEnd) {
+        if (!dayTaskMap[a.deadline]) dayTaskMap[a.deadline] = { count:0, hasScheduled:false, items:[] };
+        dayTaskMap[a.deadline].count++;
+        dayTaskMap[a.deadline].items.push({ goal:g, actionText:a.text, actionId:a.id });
+        if (isScheduled) dayTaskMap[a.deadline].hasScheduled = true;
+      }
+    });
+  });
+
+  // Calendar header
+  let html = `<div class="cal-header">
+    <button class="cal-nav-btn" onclick="navCalendar(-1)">‹</button>
+    <div class="cal-title">${monthName}</div>
+    <button class="cal-nav-btn" onclick="navCalendar(1)">›</button>
+  </div>
+  <div class="cal-grid">`;
+
+  // Day-of-week headers
+  ['S','M','T','W','T','F','S'].forEach(d => { html += `<div class="cal-dow">${d}</div>`; });
+
+  // Empty cells before first day
+  const startDow = firstDay.getDay(); // 0=Sun
+  for (let i = 0; i < startDow; i++) html += `<div class="cal-day empty"></div>`;
+
+  // Day cells
+  for (let d = 1; d <= lastDay.getDate(); d++) {
+    const dKey = dateKey(new Date(calendarYear, calendarMonth, d));
+    const dayData = dayTaskMap[dKey];
+    const isToday = dKey === today;
+    const isSelected = dKey === calendarSelectedDay;
+    const hasTasks = dayData && dayData.count > 0;
+    const hasScheduled = dayData && dayData.hasScheduled;
+
+    let cls = 'cal-day';
+    if (isToday) cls += ' today';
+    if (hasTasks) cls += hasScheduled ? ' has-scheduled' : ' has-tasks';
+    if (isSelected) cls += ' selected';
+
+    html += `<div class="${cls}" onclick="selectCalDay('${dKey}')">
+      <div class="cal-day-num">${d}</div>
+      ${hasTasks ? `<div class="cal-day-badge">${dayData.count}</div>` : ''}
+    </div>`;
+  }
+
+  // Fill remaining cells
+  const totalCells = startDow + lastDay.getDate();
+  const remaining = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+  for (let i = 0; i < remaining; i++) html += `<div class="cal-day empty"></div>`;
+
+  html += `</div>`; // end cal-grid
+
+  // Legend
+  html += `<div class="heatmap-legend" style="margin-top:10px;margin-bottom:4px">
+    <div class="cal-day-badge" style="background:var(--accent)">3</div><span>Regular tasks</span>
+    <div class="cal-day-badge" style="background:var(--c-health);margin-left:8px">2</div><span>Includes scheduled</span>
+  </div>`;
+
+  // Day detail panel — shown when a day is tapped
+  if (calendarSelectedDay && dayTaskMap[calendarSelectedDay]) {
+    const selData = dayTaskMap[calendarSelectedDay];
+    const selDate = new Date(calendarSelectedDay).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
+    html += `<div class="cal-day-detail">
+      <div class="cal-detail-title">📋 ${selDate}</div>`;
+
+    selData.items.forEach(item => {
+      const cat = state.categories.find(c => c.id === item.goal.category);
+      html += `<div class="cal-task-row">
+        <div class="cal-task-cat" style="background:${cat?`var(--c-${cat.color})`:'var(--ink3)'}"></div>
+        <div>
+          <div class="cal-task-text">${escapeHtml(item.actionText || item.goal.title)}</div>
+          <div class="cal-task-meta">
+            ${escapeHtml(item.goal.title)}${item.actionText?' · '+escapeHtml(item.goal.title):''}
+            ${item.goal.scheduledId ? ' · 🔄 Scheduled' : ''}
+            ${cat ? ` · ${escapeHtml(cat.name)}` : ''}
+          </div>
+        </div>
+      </div>`;
+    });
+
+    html += `</div>`;
+  } else if (calendarSelectedDay) {
+    html += `<div class="cal-day-detail"><div class="cal-detail-title" style="font-size:13px;color:var(--ink3)">No tasks for this day.</div></div>`;
+  }
+
+  return html;
 }
 
 function renderTodayPage() {
@@ -2884,10 +3943,16 @@ function renderTodayPage() {
     rangeEnd = dateKey(endD);
   }
 
-  // Horizon selector row
+  // Horizon selector row (always shown)
   let html = `<div class="cat-pills-row" style="display:flex;margin:0 -14px 14px;padding:0 14px 10px;border-bottom:1px solid var(--border)">
     ${TASK_HORIZONS.map(h => `<div class="cat-pill ${taskHorizon===h.id?'active':''}" onclick="setTaskHorizon('${h.id}')">${h.label}</div>`).join('')}
   </div>`;
+
+  // For "This Month" → show calendar grid instead of flat list
+  if (taskHorizon === 'month') {
+    html += renderMonthCalendar();
+    return html;
+  }
 
   // Build grouped structure: { catId -> { cat, goals: [ { goal, actions[], showGoal, dateLabel } ] } }
   const grouped = {};
@@ -4678,6 +5743,9 @@ function renderSettingsPage() {
     <div class="ask-claude-title">📤 Export — Save a Backup</div>
     <div class="ask-claude-desc">Downloads a single JSON file with EVERYTHING: goals, actions, history, points, rewards, vision page, journal, future goals. Do this regularly, and always before switching devices or clearing browser data.</div>
     <button class="btn btn-primary" style="width:100%" onclick="exportData()">⬇ Export My Data Now</button>
+    <div class="heatmap-title" style="margin:18px 0 8px">🔄 App Updates</div>
+    <div class="heatmap-sub" style="margin-bottom:10px">Currently on version <b>${APP_VERSION}</b>. When you push new code to GitHub, open the app and it will detect the update automatically. Or force-check here:</div>
+    <button class="btn btn-ghost" style="width:100%" onclick="checkForUpdate()">Check for update now</button>
   </div>`;
 
   html += `<div class="ask-claude-panel">
@@ -5257,6 +6325,89 @@ function mergeIncomingData(incoming) {
       if (!dup) state.locationLog.push(entry);
     });
   }
+
+  // ── NEW FIELDS — added after initial launch ──
+
+  // Journeys: merge by key (catId__sgId). If the key doesn't exist locally, add it.
+  // If it exists, merge levels by id — incoming levels not present locally are added.
+  if (incoming.journeys) {
+    if (!state.journeys) state.journeys = {};
+    Object.entries(incoming.journeys).forEach(([jKey, incomingJourney]) => {
+      if (!state.journeys[jKey]) {
+        state.journeys[jKey] = incomingJourney;
+      } else {
+        const existingIds = new Set((state.journeys[jKey].levels||[]).map(l => l.id));
+        (incomingJourney.levels||[]).forEach(lv => {
+          if (!existingIds.has(lv.id)) {
+            state.journeys[jKey].levels.push(lv);
+          } else {
+            // Merge: prefer completed status (once complete, stays complete)
+            const existing = state.journeys[jKey].levels.find(l => l.id === lv.id);
+            if (existing && (lv.completedManually || lv.completedDate) && !existing.completedManually) {
+              existing.completedManually = lv.completedManually;
+              existing.completedDate = lv.completedDate;
+            }
+          }
+        });
+      }
+    });
+    if (incoming.nextJourneyLevelId) {
+      state.nextJourneyLevelId = Math.max(state.nextJourneyLevelId||1, incoming.nextJourneyLevelId);
+    }
+  }
+
+  // Milestones: merge by uid — no duplicates
+  if (incoming.milestones) {
+    if (!state.milestones) state.milestones = [];
+    const existingUids = new Set(state.milestones.map(m => m.uid));
+    incoming.milestones.forEach(m => {
+      if (!existingUids.has(m.uid)) state.milestones.push(m);
+    });
+    if (incoming.nextMilestoneId) {
+      state.nextMilestoneId = Math.max(state.nextMilestoneId||1, incoming.nextMilestoneId);
+    }
+  }
+
+  // Weekly reviews: merge by weekStart (one review per week, take newer savedDate)
+  if (incoming.weeklyReviews) {
+    if (!state.weeklyReviews) state.weeklyReviews = [];
+    incoming.weeklyReviews.forEach(r => {
+      const existing = state.weeklyReviews.find(x => x.weekStart === r.weekStart);
+      if (!existing) {
+        state.weeklyReviews.push(r);
+      } else if (r.savedDate && (!existing.savedDate || r.savedDate > existing.savedDate)) {
+        Object.assign(existing, r); // newer version wins
+      }
+    });
+  }
+
+  // Decision log: merge by date+decision text (unique enough)
+  if (incoming.decisionLog) {
+    if (!state.decisionLog) state.decisionLog = [];
+    incoming.decisionLog.forEach(d => {
+      const dup = state.decisionLog.find(x => x.date === d.date && x.decision === d.decision);
+      if (!dup) state.decisionLog.push(d);
+    });
+    if (incoming.nextDecisionId) {
+      state.nextDecisionId = Math.max(state.nextDecisionId||1, incoming.nextDecisionId);
+    }
+  }
+
+  // Destiny bonus log: union of date arrays (no duplicates)
+  if (incoming.destinyBonusLog) {
+    if (!state.destinyBonusLog) state.destinyBonusLog = [];
+    incoming.destinyBonusLog.forEach(d => {
+      if (!state.destinyBonusLog.includes(d)) state.destinyBonusLog.push(d);
+    });
+  }
+
+  // Streak record log: union of date arrays
+  if (incoming.streakRecordLog) {
+    if (!state.streakRecordLog) state.streakRecordLog = [];
+    incoming.streakRecordLog.forEach(d => {
+      if (!state.streakRecordLog.includes(d)) state.streakRecordLog.push(d);
+    });
+  }
 }
 
 function importData(event) {
@@ -5296,7 +6447,8 @@ function showToast(msg) {
 // INIT
 // ═══════════════════════════════════════════════════════════════════
 currentTab = 'dashboard';
-spawnScheduledInstances(); // create any due scheduled goal instances before first render
+spawnScheduledInstances();
+checkScheduledMilestones(); // auto-complete streak-based journey levels // create any due scheduled goal instances before first render
 renderTabs();
 renderMain();
 
@@ -5307,10 +6459,67 @@ if (_justUpdatedCode) {
 // Show affirmation popup once per day, after a short delay so the app renders first
 setTimeout(() => maybeShowAffirmation(), 600);
 
-// Register service worker for offline support
+// ── UPDATE DETECTION ──
+// When the service worker finds a new version, it triggers a 'controllerchange'
+// event. We listen for it and show a non-intrusive banner so the user can
+// refresh at their convenience without losing any data.
+function doAppUpdate() {
+  if ('caches' in window) {
+    caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))).then(() => {
+      location.reload(true);
+    });
+  } else {
+    location.reload(true);
+  }
+}
+
+function checkForUpdate() {
+  showToast('Checking for updates...');
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.ready.then(reg => {
+      reg.update().then(() => {
+        if (reg.waiting) {
+          showUpdateBanner();
+          showToast('✨ Update ready — tap the banner to install');
+        } else {
+          showToast("✓ You're on the latest version");
+        }
+      });
+    }).catch(() => showToast("You're on the latest version"));
+  } else {
+    // No service worker — just do a hard reload
+    doAppUpdate();
+  }
+}
+
+function showUpdateBanner() {
+  const banner = document.getElementById('updateBanner');
+  if (banner) banner.style.display = 'flex';
+}
+
+// Register service worker and listen for updates
 if ('serviceWorker' in navigator && (location.protocol === 'http:' || location.protocol === 'https:')) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  navigator.serviceWorker.register('./sw.js').then(reg => {
+    // If a new SW is waiting (already downloaded), show banner immediately
+    if (reg.waiting) { showUpdateBanner(); return; }
+
+    // When a new SW is found and installed
+    reg.addEventListener('updatefound', () => {
+      const newWorker = reg.installing;
+      newWorker.addEventListener('statechange', () => {
+        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+          // New version ready — show the banner
+          showUpdateBanner();
+        }
+      });
+    });
+  }).catch(() => {
+    // Service worker unavailable — app still works fine
+  });
+
+  // Also show banner if controller changes (e.g. SW skipped waiting on another tab)
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    showUpdateBanner();
   });
 }
 </script>
