@@ -3777,27 +3777,110 @@ function getItemsInRange(rangeStart, rangeEnd) {
 
 // Horizon definitions: id, label, and how many days ahead the window extends (inclusive of today)
 const TASK_HORIZONS = [
-  { id: 'today',    label: 'Today',     days: 0 },
-  { id: 'tomorrow', label: 'Tomorrow',  days: 1, exact: true }, // exact: only that single day, not a range
-  { id: 'week',     label: 'This Week', days: 7 },
+  { id: 'today',    label: 'Today',      days: 0 },
+  { id: 'tomorrow', label: 'Tomorrow',   days: 1, exact: true },
+  { id: 'week',     label: 'This Week',  days: 7 },
   { id: 'month',    label: 'This Month', days: 30 },
-  { id: '3months',  label: '3 Months',  days: 90 },
-  { id: '6months',  label: '6 Months',  days: 182 },
+  { id: 'range',    label: 'Date Range', days: 0 }, // custom month range
 ];
 let taskHorizon = 'today';
 let calendarMonth = new Date().getMonth();
 let calendarYear = new Date().getFullYear();
-let calendarSelectedDay = null; // dateKey of tapped day
+let calendarSelectedDay = null;
+
+// Range picker state — user picks start/end month
+let rangeStartMonth = new Date().getMonth();
+let rangeStartYear = new Date().getFullYear();
+let rangeEndMonth = new Date().getMonth();
+let rangeEndYear = new Date().getFullYear();
 
 function setTaskHorizon(id) {
   taskHorizon = id;
   calendarSelectedDay = null;
   if (id === 'month') {
-    // Always reset to current month when switching to calendar
     calendarMonth = new Date().getMonth();
     calendarYear = new Date().getFullYear();
   }
   renderMain();
+}
+
+// ── PROJECTED TASKS ──────────────────────────────────────────────
+// Returns all tasks (goals, actions, scheduled projections) for a date range.
+// KEY FIX: also looks at scheduledGoals templates to project future occurrences
+// that haven't been spawned yet (e.g. pedicure every 30 days, due next Tuesday)
+function getProjectedTaskMap(rangeStart, rangeEnd) {
+  // dayTaskMap: dateKey -> { count, hasScheduled, items[] }
+  const map = {};
+
+  function addItem(dKey, item, isScheduled = false) {
+    if (dKey < rangeStart || dKey > rangeEnd) return;
+    if (!map[dKey]) map[dKey] = { count:0, hasScheduled:false, items:[] };
+    map[dKey].count++;
+    map[dKey].items.push(item);
+    if (isScheduled) map[dKey].hasScheduled = true;
+  }
+
+  // 1. Regular goals in state.goals
+  state.goals.forEach(g => {
+    if (g.done) return;
+    if (g.isToday && rangeStart <= todayKey() && rangeEnd >= todayKey()) {
+      addItem(todayKey(), { goal:g, actionText:null, isScheduled:!!g.scheduledId });
+    }
+    // Spanning goals — show on each day of their window within range
+    if (g.startDate && g.deadline) {
+      const start = g.startDate > rangeStart ? g.startDate : rangeStart;
+      const end = g.deadline < rangeEnd ? g.deadline : rangeEnd;
+      if (start <= end) {
+        let cur = new Date(start);
+        while (dateKey(cur) <= end) {
+          addItem(dateKey(cur), { goal:g, actionText:null, isScheduled:!!g.scheduledId }, !!g.scheduledId);
+          cur.setDate(cur.getDate()+1);
+          if (dateKey(cur) > end) break;
+        }
+      }
+    } else if (g.deadline) {
+      addItem(g.deadline, { goal:g, actionText:null, isScheduled:!!g.scheduledId }, !!g.scheduledId);
+    }
+    // Actions
+    (g.actions||[]).forEach(a => {
+      if (a.recurring && a.occurrences) {
+        a.occurrences.filter(o => o.date >= rangeStart && o.date <= rangeEnd && !o.done).forEach(occ => {
+          addItem(occ.date, { goal:g, actionText:a.text, occDate:occ.date, actionId:a.id, isScheduled:!!g.scheduledId }, !!g.scheduledId);
+        });
+      } else if (!a.done && a.deadline && a.deadline >= rangeStart && a.deadline <= rangeEnd) {
+        addItem(a.deadline, { goal:g, actionText:a.text, actionId:a.id, isScheduled:!!g.scheduledId }, !!g.scheduledId);
+      }
+    });
+  });
+
+  // 2. Scheduled goal TEMPLATES — project future occurrences not yet spawned
+  (state.scheduledGoals||[]).forEach(sc => {
+    if (!sc.active) return;
+    const stepDays = intervalToDays(sc.interval, sc.unit);
+    let cursor = new Date(sc.firstDue);
+    let safeguard = 0;
+    while (safeguard++ < 1000) {
+      const dKey = dateKey(cursor);
+      if (dKey > rangeEnd) break;
+      if (dKey >= rangeStart) {
+        // Only add if not already spawned (spawned instances already in state.goals above)
+        const alreadySpawned = state.goals.find(g => g.scheduledId === sc.id && g.scheduledDue === dKey)
+          || state.goalHistory.find(g => g.scheduledId === sc.id && g.scheduledDue === dKey);
+        if (!alreadySpawned) {
+          const cat = state.categories.find(c => c.id === sc.category);
+          addItem(dKey, {
+            goal: { id: 0, uid: `sc_proj_${sc.id}_${dKey}`, title: sc.title, category: sc.category, scheduledId: sc.id, done: false },
+            actionText: null,
+            isScheduled: true,
+            isProjected: true, // not yet spawned — future projection
+          }, true);
+        }
+      }
+      cursor.setDate(cursor.getDate() + stepDays);
+    }
+  });
+
+  return map;
 }
 
 function navCalendar(delta) {
@@ -3821,36 +3904,9 @@ function renderMonthCalendar() {
   const monthEnd = dateKey(lastDay);
   const monthName = firstDay.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
 
-  // Build a map of dateKey -> task count for the month
-  const dayTaskMap = {}; // dateKey -> { count, hasScheduled, items[] }
-  state.goals.forEach(g => {
-    if (g.done) return;
-    const isScheduled = !!g.scheduledId;
-    // Goal with deadline in this month
-    if (g.deadline && g.deadline >= monthStart && g.deadline <= monthEnd) {
-      if (!dayTaskMap[g.deadline]) dayTaskMap[g.deadline] = { count:0, hasScheduled:false, items:[] };
-      dayTaskMap[g.deadline].count++;
-      dayTaskMap[g.deadline].items.push({ goal:g, actionText:null });
-      if (isScheduled) dayTaskMap[g.deadline].hasScheduled = true;
-    }
-    // Actions with deadline in this month
-    (g.actions||[]).forEach(a => {
-      if (a.recurring && a.occurrences) {
-        a.occurrences.filter(o => o.date >= monthStart && o.date <= monthEnd && !o.done).forEach(occ => {
-          if (!dayTaskMap[occ.date]) dayTaskMap[occ.date] = { count:0, hasScheduled:false, items:[] };
-          dayTaskMap[occ.date].count++;
-          dayTaskMap[occ.date].items.push({ goal:g, actionText:a.text, occDate:occ.date, actionId:a.id });
-        });
-      } else if (!a.done && a.deadline && a.deadline >= monthStart && a.deadline <= monthEnd) {
-        if (!dayTaskMap[a.deadline]) dayTaskMap[a.deadline] = { count:0, hasScheduled:false, items:[] };
-        dayTaskMap[a.deadline].count++;
-        dayTaskMap[a.deadline].items.push({ goal:g, actionText:a.text, actionId:a.id });
-        if (isScheduled) dayTaskMap[a.deadline].hasScheduled = true;
-      }
-    });
-  });
+  // Use unified projected task map (includes scheduled templates)
+  const dayTaskMap = getProjectedTaskMap(monthStart, monthEnd);
 
-  // Calendar header
   let html = `<div class="cal-header">
     <button class="cal-nav-btn" onclick="navCalendar(-1)">‹</button>
     <div class="cal-title">${monthName}</div>
@@ -3858,19 +3914,17 @@ function renderMonthCalendar() {
   </div>
   <div class="cal-grid">`;
 
-  // Day-of-week headers
   ['S','M','T','W','T','F','S'].forEach(d => { html += `<div class="cal-dow">${d}</div>`; });
 
-  // Empty cells before first day
-  const startDow = firstDay.getDay(); // 0=Sun
+  const startDow = firstDay.getDay();
   for (let i = 0; i < startDow; i++) html += `<div class="cal-day empty"></div>`;
 
-  // Day cells
   for (let d = 1; d <= lastDay.getDate(); d++) {
     const dKey = dateKey(new Date(calendarYear, calendarMonth, d));
     const dayData = dayTaskMap[dKey];
     const isToday = dKey === today;
     const isSelected = dKey === calendarSelectedDay;
+    const isPast = dKey < today;
     const hasTasks = dayData && dayData.count > 0;
     const hasScheduled = dayData && dayData.hasScheduled;
 
@@ -3878,6 +3932,7 @@ function renderMonthCalendar() {
     if (isToday) cls += ' today';
     if (hasTasks) cls += hasScheduled ? ' has-scheduled' : ' has-tasks';
     if (isSelected) cls += ' selected';
+    if (isPast && !hasTasks) cls += ' past-empty';
 
     html += `<div class="${cls}" onclick="selectCalDay('${dKey}')">
       <div class="cal-day-num">${d}</div>
@@ -3885,46 +3940,200 @@ function renderMonthCalendar() {
     </div>`;
   }
 
-  // Fill remaining cells
   const totalCells = startDow + lastDay.getDate();
   const remaining = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
   for (let i = 0; i < remaining; i++) html += `<div class="cal-day empty"></div>`;
+  html += `</div>`;
 
-  html += `</div>`; // end cal-grid
-
-  // Legend
-  html += `<div class="heatmap-legend" style="margin-top:10px;margin-bottom:4px">
-    <div class="cal-day-badge" style="background:var(--accent)">3</div><span>Regular tasks</span>
-    <div class="cal-day-badge" style="background:var(--c-health);margin-left:8px">2</div><span>Includes scheduled</span>
+  html += `<div class="heatmap-legend" style="margin-top:8px;margin-bottom:4px">
+    <div class="cal-day-badge" style="background:var(--accent)">3</div><span>Regular tasks &nbsp;</span>
+    <div class="cal-day-badge" style="background:var(--c-health)">2</div><span>Includes scheduled</span>
   </div>`;
 
-  // Day detail panel — shown when a day is tapped
-  if (calendarSelectedDay && dayTaskMap[calendarSelectedDay]) {
+  // Day detail popup
+  if (calendarSelectedDay) {
     const selData = dayTaskMap[calendarSelectedDay];
     const selDate = new Date(calendarSelectedDay).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
-    html += `<div class="cal-day-detail">
-      <div class="cal-detail-title">📋 ${selDate}</div>`;
-
-    selData.items.forEach(item => {
-      const cat = state.categories.find(c => c.id === item.goal.category);
-      html += `<div class="cal-task-row">
-        <div class="cal-task-cat" style="background:${cat?`var(--c-${cat.color})`:'var(--ink3)'}"></div>
-        <div>
-          <div class="cal-task-text">${escapeHtml(item.actionText || item.goal.title)}</div>
-          <div class="cal-task-meta">
-            ${escapeHtml(item.goal.title)}${item.actionText?' · '+escapeHtml(item.goal.title):''}
-            ${item.goal.scheduledId ? ' · 🔄 Scheduled' : ''}
-            ${cat ? ` · ${escapeHtml(cat.name)}` : ''}
-          </div>
-        </div>
-      </div>`;
-    });
-
-    html += `</div>`;
-  } else if (calendarSelectedDay) {
-    html += `<div class="cal-day-detail"><div class="cal-detail-title" style="font-size:13px;color:var(--ink3)">No tasks for this day.</div></div>`;
+    html += renderDayPopup(calendarSelectedDay, selDate, selData);
   }
 
+  return html;
+}
+
+// Visually appealing day popup used by both calendar views
+function renderDayPopup(dKey, dateLabel, dayData) {
+  const isToday = dKey === todayKey();
+  const isPast = dKey < todayKey();
+  const badge = isToday ? '📍 Today' : isPast ? '📅 Past' : '📌 Upcoming';
+
+  let html = `<div class="cal-day-detail" style="margin-top:12px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div>
+        <div class="cal-detail-title" style="margin-bottom:2px">📋 ${escapeHtml(dateLabel)}</div>
+        <span style="font-size:11px;background:var(--accent-l);color:var(--accent);padding:2px 8px;border-radius:8px;font-weight:600">${badge}</span>
+      </div>
+      ${dayData ? `<span style="font-size:13px;font-weight:700;color:var(--accent)">${dayData.count} task${dayData.count!==1?'s':''}</span>` : ''}
+    </div>`;
+
+  if (!dayData || !dayData.items.length) {
+    html += `<div style="text-align:center;padding:16px 0;color:var(--ink3);font-size:13px">No tasks scheduled for this day ✨</div>`;
+  } else {
+    dayData.items.forEach(item => {
+      const cat = state.categories.find(c => c.id === item.goal.category);
+      const title = item.actionText || item.goal.title;
+      const subtitle = item.actionText ? item.goal.title : (cat ? cat.name : '');
+      html += `<div class="cal-task-row">
+        <div class="cal-task-cat" style="background:${cat?`var(--c-${cat.color})`:'var(--ink3)'}"></div>
+        <div style="flex:1;min-width:0">
+          <div class="cal-task-text">${escapeHtml(title)}</div>
+          <div class="cal-task-meta">${escapeHtml(subtitle)}${item.goal.scheduledId||item.isScheduled?' · 🔄 Scheduled':''}${item.isProjected?' · Upcoming instance':''}</div>
+        </div>
+        ${item.goal.done ? '<span style="font-size:11px;color:var(--done)">✓ Done</span>' : ''}
+      </div>`;
+    });
+  }
+  html += `</div>`;
+  return html;
+}
+
+// Date range calendar — replaces "3 Months" and "6 Months"
+let rangeCalSelectedDay = null;
+
+function setRangeMonth(startYear, startMonth, endYear, endMonth) {
+  rangeStartYear = startYear; rangeStartMonth = startMonth;
+  rangeEndYear = endYear; rangeEndMonth = endMonth;
+  rangeCalSelectedDay = null;
+  renderMain();
+}
+
+function renderRangeCalendar() {
+  const today = todayKey();
+  const rStart = dateKey(new Date(rangeStartYear, rangeStartMonth, 1));
+  const rEnd = dateKey(new Date(rangeEndYear, rangeEndMonth + 1, 0));
+
+  // Range picker UI — pick start and end month
+  const now = new Date();
+  const months = [];
+  for (let i = -3; i <= 9; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    months.push({ year: d.getFullYear(), month: d.getMonth(), label: d.toLocaleDateString('en-GB',{month:'short',year:'2-digit'}) });
+  }
+
+  const taskMap = getProjectedTaskMap(rStart, rEnd);
+  const totalTasks = Object.values(taskMap).reduce((s,d) => s+d.count, 0);
+
+  let html = `<div class="heatmap-title" style="margin-bottom:8px">📆 Date Range</div>
+  <div style="display:flex;gap:10px;margin-bottom:14px;align-items:flex-end">
+    <div style="flex:1">
+      <div style="font-size:11px;color:var(--ink3);margin-bottom:4px;text-transform:uppercase;letter-spacing:.3px">From</div>
+      <select class="field-select" onchange="(function(v){const p=v.split('-');rangeStartYear=+p[0];rangeStartMonth=+p[1];if(rangeStartYear>rangeEndYear||(rangeStartYear===rangeEndYear&&rangeStartMonth>rangeEndMonth)){rangeEndYear=rangeStartYear;rangeEndMonth=rangeStartMonth;}rangeCalSelectedDay=null;renderMain();})(this.value)">
+        ${months.map(m=>`<option value="${m.year}-${m.month}" ${m.year===rangeStartYear&&m.month===rangeStartMonth?'selected':''}>${m.label}</option>`).join('')}
+      </select>
+    </div>
+    <div style="flex:1">
+      <div style="font-size:11px;color:var(--ink3);margin-bottom:4px;text-transform:uppercase;letter-spacing:.3px">To</div>
+      <select class="field-select" onchange="(function(v){const p=v.split('-');rangeEndYear=+p[0];rangeEndMonth=+p[1];rangeCalSelectedDay=null;renderMain();})(this.value)">
+        ${months.map(m=>`<option value="${m.year}-${m.month}" ${m.year===rangeEndYear&&m.month===rangeEndMonth?'selected':''}>${m.label}</option>`).join('')}
+      </select>
+    </div>
+  </div>
+  <div style="font-size:12px;color:var(--ink3);margin-bottom:12px">${totalTasks} task${totalTasks!==1?'s':''} across this range</div>`;
+
+  // Render month grids for each month in range
+  for (let y = rangeStartYear, m = rangeStartMonth; ; ) {
+    const firstDay = new Date(y, m, 1);
+    const lastDay = new Date(y, m + 1, 0);
+    const mName = firstDay.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+    const mStart = dateKey(firstDay);
+    const mEnd = dateKey(lastDay);
+
+    html += `<div style="margin-bottom:18px">
+      <div style="font-size:13px;font-weight:600;color:var(--ink);margin-bottom:8px">${mName}</div>
+      <div class="cal-grid">`;
+    ['S','M','T','W','T','F','S'].forEach(d => { html += `<div class="cal-dow">${d}</div>`; });
+    const startDow = firstDay.getDay();
+    for (let i = 0; i < startDow; i++) html += `<div class="cal-day empty"></div>`;
+    for (let d = 1; d <= lastDay.getDate(); d++) {
+      const dKey = dateKey(new Date(y, m, d));
+      const dayData = taskMap[dKey];
+      const isToday = dKey === today;
+      const isSelected = dKey === rangeCalSelectedDay;
+      const hasTasks = dayData && dayData.count > 0;
+      const hasScheduled = dayData && dayData.hasScheduled;
+      let cls = 'cal-day';
+      if (isToday) cls += ' today';
+      if (hasTasks) cls += hasScheduled ? ' has-scheduled' : ' has-tasks';
+      if (isSelected) cls += ' selected';
+      html += `<div class="${cls}" onclick="rangeCalSelectedDay='${dKey}';renderMain()">
+        <div class="cal-day-num">${d}</div>
+        ${hasTasks ? `<div class="cal-day-badge">${dayData.count}</div>` : ''}
+      </div>`;
+    }
+    const tc = startDow + lastDay.getDate();
+    const rem = tc % 7 === 0 ? 0 : 7 - (tc % 7);
+    for (let i = 0; i < rem; i++) html += `<div class="cal-day empty"></div>`;
+    html += `</div></div>`; // end cal-grid + month
+
+    if (y === rangeEndYear && m === rangeEndMonth) break;
+    m++; if (m > 11) { m = 0; y++; }
+    if (y > rangeEndYear + 2) break; // safety
+  }
+
+  // Day popup
+  if (rangeCalSelectedDay) {
+    const selDate = new Date(rangeCalSelectedDay).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+    html += renderDayPopup(rangeCalSelectedDay, selDate, taskMap[rangeCalSelectedDay]);
+  }
+
+  return html;
+}
+
+// ── WEEK BY DAY VIEW ─────────────────────────────────────────────
+function renderWeekByDay(rangeStart, rangeEnd) {
+  const taskMap = getProjectedTaskMap(rangeStart, rangeEnd);
+  const today = todayKey();
+  let html = '';
+
+  // Walk each day in the range
+  let cursor = new Date(rangeStart);
+  const endDate = new Date(rangeEnd);
+  while (cursor <= endDate) {
+    const dKey = dateKey(cursor);
+    const dayName = cursor.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' });
+    const isToday = dKey === today;
+    const isPast = dKey < today;
+    const dayData = taskMap[dKey];
+    const hasTasks = dayData && dayData.count > 0;
+
+    // Day header
+    html += `<div style="margin-bottom:${hasTasks?'8px':'14px'}">
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);margin-bottom:6px">
+        <div style="font-size:13px;font-weight:600;color:${isToday?'var(--accent)':isPast?'var(--ink3)':'var(--ink)'}">${dayName}${isToday?' · Today':''}</div>
+        ${hasTasks ? `<span style="font-size:11px;font-weight:700;background:${dayData.hasScheduled?'var(--c-health-l)':'var(--accent-l)'};color:${dayData.hasScheduled?'var(--c-health)':'var(--accent)'};padding:2px 8px;border-radius:10px">${dayData.count} task${dayData.count!==1?'s':''}</span>` : ''}
+      </div>`;
+
+    if (!hasTasks) {
+      html += `<div style="font-size:12.5px;color:var(--ink3);padding:4px 0 2px;font-style:italic">Nothing scheduled</div>`;
+    } else {
+      dayData.items.forEach(item => {
+        const cat = state.categories.find(c => c.id === item.goal.category);
+        const title = item.actionText || item.goal.title;
+        html += `<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:6px;box-shadow:var(--shadow)">
+          <div style="width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px;background:${cat?`var(--c-${cat.color})`:'var(--ink3)'}"></div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13.5px;font-weight:500;color:${item.goal.done?'var(--ink3)':'var(--ink)'};${item.goal.done?'text-decoration:line-through':''}">${escapeHtml(title)}</div>
+            ${item.actionText ? `<div style="font-size:11.5px;color:var(--ink3)">${escapeHtml(item.goal.title)}</div>` : ''}
+            <div style="font-size:11px;color:var(--ink3);margin-top:2px">
+              ${cat?escapeHtml(cat.name):''}${item.goal.scheduledId||item.isScheduled?' · 🔄 Scheduled':''}${item.isProjected?' · <i>upcoming instance</i>':''}
+            </div>
+          </div>
+          ${item.goal.done ? '<span style="font-size:12px;color:var(--done);flex-shrink:0">✓</span>' : ''}
+        </div>`;
+      });
+    }
+    html += `</div>`;
+    cursor.setDate(cursor.getDate() + 1);
+  }
   return html;
 }
 
@@ -3948,41 +4157,49 @@ function renderTodayPage() {
     ${TASK_HORIZONS.map(h => `<div class="cat-pill ${taskHorizon===h.id?'active':''}" onclick="setTaskHorizon('${h.id}')">${h.label}</div>`).join('')}
   </div>`;
 
-  // For "This Month" → show calendar grid instead of flat list
-  if (taskHorizon === 'month') {
-    html += renderMonthCalendar();
+  // Calendar views
+  if (taskHorizon === 'month') { html += renderMonthCalendar(); return html; }
+  if (taskHorizon === 'range') { html += renderRangeCalendar(); return html; }
+
+  // "This Week" → day-by-day grouped view
+  if (taskHorizon === 'week') {
+    html += renderWeekByDay(rangeStart, rangeEnd);
     return html;
   }
 
-  // Build grouped structure: { catId -> { cat, goals: [ { goal, actions[], showGoal, dateLabel } ] } }
+  // Build grouped structure using projected task map (includes scheduled templates)
+  const taskMap = getProjectedTaskMap(rangeStart, rangeEnd);
+  const allItems = Object.values(taskMap).flatMap(d => d.items);
+
+  // Group by category for display
   const grouped = {};
-  let totalCount = 0;
-
-  function inRange(dateStr) {
-    return dateStr >= rangeStart && dateStr <= rangeEnd;
-  }
-
-  state.goals.forEach(g => {
-    if (g.done) return;
-    const goalInRange = taskHorizon === 'today'
-      ? isForToday(g)
-      : isGoalInRange(g, rangeStart, rangeEnd);
-
-    const matchingActions = (g.actions||[]).filter(a => {
-      if (a.recurring && a.occurrences) return a.occurrences.some(o => inRange(o.date) && !o.done);
-      return !a.done && a.deadline && inRange(a.deadline);
-    });
-
-    if (!goalInRange && !matchingActions.length) return;
-
-    const cat = state.categories.find(c => c.id === g.category);
-    if (!grouped[g.category]) grouped[g.category] = { cat, goals: [] };
-
-    grouped[g.category].goals.push({ goal: g, actions: matchingActions, showGoal: goalInRange && !matchingActions.length });
-    totalCount++;
+  allItems.forEach(item => {
+    const catId = item.goal.category || '_none';
+    if (!grouped[catId]) {
+      grouped[catId] = { cat: state.categories.find(c => c.id === catId), goals: [] };
+    }
+    // Merge items by goal — if same goal appears multiple times (spanning goal), deduplicate
+    const existing = grouped[catId].goals.find(g => g.goal.id === item.goal.id && !item.actionText);
+    if (!existing || item.actionText) {
+      grouped[catId].goals.push(item);
+    }
   });
 
-  const allEmpty = Object.keys(grouped).length === 0;
+  // For Today specifically, also include isForToday goals not caught by deadline match
+  if (taskHorizon === 'today') {
+    state.goals.forEach(g => {
+      if (g.done || !isForToday(g)) return;
+      const catId = g.category || '_none';
+      const alreadyIncluded = allItems.some(item => item.goal.id === g.id);
+      if (!alreadyIncluded) {
+        if (!grouped[catId]) grouped[catId] = { cat: state.categories.find(c => c.id === catId), goals: [] };
+        grouped[catId].goals.push({ goal: g, actionText: null, isScheduled: false });
+      }
+    });
+  }
+
+  const totalCount = Object.values(grouped).reduce((s, g) => s + g.goals.length, 0);
+  const allEmpty = totalCount === 0;
   const doneCount = state.dailyLog[todayKeyStr] || 0;
 
   const summaryLabel = horizon.exact
@@ -3997,46 +4214,44 @@ function renderTodayPage() {
   if (allEmpty) {
     const msg = taskHorizon === 'today'
       ? 'Nothing scheduled for today. Tap <b>+</b> and check "Add to today\'s tasks", or set a deadline of today on any goal or action.'
-      : `Nothing with a deadline in this window yet. Set deadlines on goals or actions to see them show up under ${horizon.label}.`;
+      : `Nothing with a deadline in this window yet — including scheduled goals.`;
     html += `<div class="empty-state"><div class="icon">☀️</div><p>${msg}</p></div>`;
   } else {
     Object.values(grouped).forEach(({ cat, goals }) => {
+      if (!goals.length) return;
       html += `<div class="category-section">`;
       if (cat) html += `<div class="category-head"><div class="cat-dot" style="background:var(--c-${cat.color})"></div><div class="cat-name" style="font-size:14px">${escapeHtml(cat.name)}</div></div>`;
 
-      goals.forEach(({ goal, actions, showGoal }) => {
-        html += `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;box-shadow:var(--shadow)">`;
-        html += `<div style="font-size:13.5px;font-weight:500;color:var(--ink);margin-bottom:${actions.length?'8px':'0'}">${escapeHtml(goal.title)}`;
-        if (goal.time) html += `<span class="goal-deadline" style="margin-left:6px">⏰ ${goal.time}</span>`;
-        if (goal.deadline && taskHorizon !== 'today') html += `<span class="goal-deadline" style="margin-left:6px">📅 ${new Date(goal.deadline).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span>`;
-        html += `</div>`;
+      goals.forEach(item => {
+        const { goal, actionText, isScheduled, isProjected } = item;
+        const occ = item.occDate;
+        const actionId = item.actionId;
+        const title = actionText || goal.title;
+        const isDone = goal.done || false;
 
-        if (showGoal && !actions.length) {
-          html += `<div class="quick-task-row" style="padding:0;border:none;background:none;margin:0">
-            <div class="goal-check ${goal.done?'checked':''}" style="width:22px;height:22px" onclick="toggleGoal(${goal.id})"></div>
-            <div class="quick-task-text ${goal.done?'done':''}">Mark complete</div>
-          </div>`;
+        html += `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;box-shadow:var(--shadow)">
+          <div style="display:flex;align-items:flex-start;gap:10px">`;
+
+        if (!isProjected && goal.id) {
+          if (actionText && occ) {
+            html += `<div class="goal-check" style="width:22px;height:22px;flex-shrink:0" onclick="toggleOccurrence(${goal.id},${actionId},'${occ}')"></div>`;
+          } else if (actionText && actionId) {
+            html += `<div class="goal-check" style="width:22px;height:22px;flex-shrink:0" onclick="toggleAction(${goal.id},${actionId})"></div>`;
+          } else {
+            html += `<div class="goal-check ${isDone?'checked':''}" style="width:22px;height:22px;flex-shrink:0" onclick="toggleGoal(${goal.id})"></div>`;
+          }
+        } else {
+          // Projected — not spawned yet, show calendar icon
+          html += `<div style="width:22px;height:22px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px">🔄</div>`;
         }
 
-        actions.forEach(a => {
-          if (a.recurring && a.occurrences) {
-            const occsInRange = a.occurrences.filter(o => inRange(o.date));
-            occsInRange.forEach(occ => {
-              const dateLabel = taskHorizon !== 'today' ? `<span style="color:var(--ink3);font-size:11px;margin-left:4px">${new Date(occ.date).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span>` : '';
-              html += `<div class="quick-task-row" style="padding:4px 0;border:none;background:none;margin:0">
-                <div class="goal-check ${occ.done?'checked':''}" style="width:22px;height:22px" onclick="toggleOccurrence(${goal.id},${a.id},'${occ.date}')"></div>
-                <div class="quick-task-text ${occ.done?'done':''}">${escapeHtml(a.text)} <span style="color:var(--ink3);font-size:11px">+${a.points||0}pts</span>${dateLabel}</div>
-              </div>`;
-            });
-          } else {
-            const dateLabel = taskHorizon !== 'today' && a.deadline ? `<span style="color:var(--ink3);font-size:11px;margin-left:4px">${new Date(a.deadline).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span>` : '';
-            html += `<div class="quick-task-row" style="padding:4px 0;border:none;background:none;margin:0">
-              <div class="goal-check ${a.done?'checked':''}" style="width:22px;height:22px" onclick="toggleAction(${goal.id},${a.id})"></div>
-              <div class="quick-task-text ${a.done?'done':''}">${escapeHtml(a.text)} <span style="color:var(--ink3);font-size:11px">+${a.points||0}pts</span>${dateLabel}</div>
-            </div>`;
-          }
-        });
-        html += `</div>`;
+        html += `<div style="flex:1;min-width:0">
+            <div style="font-size:13.5px;font-weight:500;color:${isDone?'var(--ink3)':'var(--ink)'};${isDone?'text-decoration:line-through':''}">${escapeHtml(title)}</div>
+            ${actionText ? `<div style="font-size:12px;color:var(--ink3)">${escapeHtml(goal.title)}</div>` : ''}
+            ${isScheduled||isProjected ? `<span style="font-size:10.5px;color:var(--c-health);font-weight:600">🔄 Scheduled${isProjected?' · upcoming':''}</span>` : ''}
+            ${goal.time ? `<span class="goal-deadline" style="margin-left:4px">⏰ ${goal.time}</span>` : ''}
+          </div>
+        </div></div>`;
       });
       html += `</div>`;
     });
