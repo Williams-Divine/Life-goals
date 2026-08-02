@@ -71,6 +71,7 @@ body { min-height: 100vh; padding-bottom: 70px; } /* space for bottom nav */
 .cat-pills-row {
   display: flex; gap: 8px; padding: 10px 16px; overflow-x: auto;
   scrollbar-width: none; background: var(--surface); border-bottom: 1px solid var(--border);
+  position: sticky; top: 52px; z-index: 40; /* sticks directly beneath the fixed stats header */
 }
 .cat-pills-row::-webkit-scrollbar { display: none; }
 .cat-pill {
@@ -288,10 +289,6 @@ body { min-height: 100vh; padding-bottom: 70px; } /* space for bottom nav */
 .journey-actions-row { display:flex; gap:6px; margin-top:10px; flex-wrap:wrap; }
 
 /* ── STICKY PILL ROWS — all scrollable pill rows stick when scrolling page ── */
-.cat-pills-row {
-  position: sticky; top: 0; z-index: 40;
-  background: var(--surface); border-bottom: 1px solid var(--border);
-}
 .month-pill-row { display: flex; gap: 6px; min-width: max-content; padding-bottom: 2px; }
 
 /* ── MONTHLY CALENDAR ── */
@@ -374,6 +371,10 @@ body { min-height: 100vh; padding-bottom: 70px; } /* space for bottom nav */
   padding: 0 4px;
 }
 .cat-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.cat-attention-dot {
+  position: absolute; top: -3px; right: -3px; width: 7px; height: 7px;
+  border-radius: 50%; background: var(--danger); border: 1.5px solid var(--surface);
+}
 .cat-name { font-family: var(--serif); font-size: 18px; font-weight: 600; color: var(--ink); }
 .cat-count { font-size: 12px; color: var(--ink3); margin-left: auto; }
 .cat-add-btn {
@@ -1061,10 +1062,6 @@ body { min-height: 100vh; padding-bottom: 70px; } /* space for bottom nav */
       <input type="checkbox" id="f-scheduled" style="width:18px;height:18px;cursor:pointer" onchange="toggleGoalScheduleFields()">
       <label for="f-scheduled" style="font-size:13px;color:var(--ink2);cursor:pointer">🔄 Make this a recurring scheduled goal</label>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;padding:4px 0 8px">
-      <input type="checkbox" id="f-milestone" style="width:18px;height:18px;cursor:pointer">
-      <label for="f-milestone" style="font-size:13px;color:var(--ink2);cursor:pointer">🏅 Mark as a milestone goal</label>
-    </div>
     <div id="f-schedule-fields" style="display:none;background:var(--surface2);border-radius:10px;padding:12px;margin-bottom:8px">
       <div class="field-label" style="margin-bottom:6px">Repeat every</div>
       <div class="field-row" style="margin-bottom:8px">
@@ -1152,6 +1149,19 @@ body { min-height: 100vh; padding-bottom: 70px; } /* space for bottom nav */
 <!-- Hidden file input for import — must exist in DOM for the import button to work -->
 <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
 
+<!-- LINK GOALS TO LEVEL MODAL -->
+<div class="modal-overlay" id="linkGoalsModalOverlay">
+  <div class="modal">
+    <div class="modal-title">Link Goals to This Level</div>
+    <div style="font-size:12.5px;color:var(--ink3);margin-bottom:12px">Select which goals in this subgroup belong to this level.</div>
+    <div id="linkGoalsList" style="max-height:320px;overflow-y:auto;margin-bottom:14px"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('linkGoalsModalOverlay')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveLinkedGoals()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- JOURNEY LEVEL MODAL -->
 <div class="modal-overlay" id="journeyLevelModalOverlay">
   <div class="modal">
@@ -1166,19 +1176,22 @@ body { min-height: 100vh; padding-bottom: 70px; } /* space for bottom nav */
       <option value="25" selected>🥈 Medium — 25 pts</option>
       <option value="50">🥇 Big — 50 pts</option>
     </select>
-    <div class="field-label">Streak milestone (optional)</div>
-    <div class="field-row">
-      <div><input class="field-input" id="jl-streak" type="number" min="0" placeholder="Days" style="width:80px"></div>
-      <div style="flex:1;font-size:12px;color:var(--ink3);display:flex;align-items:center">days straight auto-completes this level</div>
-    </div>
-    <div class="field-label">Scheduled goal occurrence count (optional)</div>
-    <div class="field-row">
-      <div><input class="field-input" id="jl-occurrences" type="number" min="0" placeholder="Count" style="width:80px"></div>
-      <div style="flex:1;font-size:12px;color:var(--ink3);display:flex;align-items:center">completions of a scheduled goal auto-completes this level</div>
-    </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal('journeyLevelModalOverlay')">Cancel</button>
       <button class="btn btn-primary" onclick="saveJourneyLevel()">Save Level</button>
+    </div>
+  </div>
+</div>
+
+<!-- LINK GOALS TO LEVEL MODAL -->
+<div class="modal-overlay" id="linkGoalsModalOverlay">
+  <div class="modal">
+    <div class="modal-title" id="linkGoalsModalTitle">Link Goals to Level</div>
+    <div style="font-size:12px;color:var(--ink3);margin-bottom:10px">Select which goals from this subgroup belong to this level.</div>
+    <div id="linkGoalsChecklist" style="max-height:320px;overflow-y:auto;margin-bottom:12px"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('linkGoalsModalOverlay')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveLinkedGoals()">Save</button>
     </div>
   </div>
 </div>
@@ -1257,6 +1270,20 @@ body { min-height: 100vh; padding-bottom: 70px; } /* space for bottom nav */
     <input class="field-input" id="sc-points" type="number" min="0" value="5">
     <div class="field-label">Notes (optional)</div>
     <input class="field-input" id="sc-notes" placeholder="Brief reminder of what this involves">
+
+    <div class="field-label">🏅 Celebrate as a milestone after (optional)</div>
+    <div class="field-row">
+      <div><input class="field-input" id="sc-milestone-count" type="number" min="0" placeholder="e.g. 10" style="width:90px"></div>
+      <div style="flex:1;font-size:12px;color:var(--ink3);display:flex;align-items:center">completions — then the count restarts</div>
+    </div>
+    <div id="sc-milestone-pts-row" style="display:none">
+      <div class="field-label">Milestone reward points</div>
+      <select class="field-select" id="sc-milestone-pts">
+        <option value="10">🥉 Small — 10 pts</option>
+        <option value="25" selected>🥈 Medium — 25 pts</option>
+        <option value="50">🥇 Big — 50 pts</option>
+      </select>
+    </div>
 
     <div class="field-label">Actions (optional — added to every instance)</div>
     <div id="sc-actions-list" style="margin-bottom:8px"></div>
@@ -1440,7 +1467,8 @@ const DEFAULT_DATA = {
   nextScheduledId: 1,
   milestones: [], // manually pinned milestones with personal notes
   nextMilestoneId: 1,
-  journeys: {}, // key: "catId__sgId" -> { levels: [ { id, title, desc, linkedGoalUids[], streakTarget, streakCatId, completedManually, completedDate } ] }
+  dismissalLog: {}, // key -> count of dismissed recurring/scheduled items
+  journeys: {}, // key: "catId__sgId" -> { levels: [ { id, title, desc, linkedGoalUids[], tier, completedManually, completedDate } ] }
   nextJourneyLevelId: 1,
 };
 
@@ -1515,6 +1543,7 @@ function backfillUIDs(s) {
   if (!s.nextScheduledId) s.nextScheduledId = 1;
   if (!s.milestones) s.milestones = [];
   if (!s.nextMilestoneId) s.nextMilestoneId = 1;
+  if (!s.dismissalLog) s.dismissalLog = {};
   if (!s.journeys) s.journeys = {};
   if (!s.nextJourneyLevelId) s.nextJourneyLevelId = 1;
   if (s.bestStreakEver === undefined) s.bestStreakEver = 0;
@@ -1655,7 +1684,6 @@ function renderTabs() {
       pillsRow.style.display = 'flex';
       const allActive = currentTab === 'all' || currentTab === 'goals';
       pillsRow.innerHTML =
-        `<div class="cat-pill ${allActive?'active':''}" onclick="setTab('all')">All</div>` +
         state.categories.map(c =>
           `<div class="cat-pill ${currentTab===c.id?'active':''}" onclick="setTab('${c.id}')" style="${currentTab===c.id?'background:var(--c-'+c.color+');border-color:var(--c-'+c.color+')':''}">${escapeHtml(c.name)}</div>`
         ).join('');
@@ -1677,7 +1705,7 @@ function renderTabs() {
 function setBottomNav(section) {
   closeBottomMore();
   if (section === 'home') setTab('dashboard');
-  else if (section === 'goals') setTab(currentTab && state.categories.find(c=>c.id===currentTab) ? currentTab : 'all');
+  else if (section === 'goals') setTab(currentTab && state.categories.find(c=>c.id===currentTab) ? currentTab : (state.categories[0]?.id || 'all'));
   else if (section === 'today') setTab('today');
   else if (section === 'grow') setTab(GROW_PAGES.find(p=>p.id===currentTab) ? currentTab : 'blueprint');
   else if (section === 'more') toggleBottomMore(document.getElementById('nav-more'));
@@ -1814,9 +1842,10 @@ function renderMain() {
     });
 
     const doneCount = goals.filter(g=>g.done).length;
+    const catNeedsAttention = categoryHasTodayOrOverdue(cat.id);
     html += `<div class="category-section">
       <div class="category-head">
-        <div class="cat-dot" style="background:var(--c-${cat.color})"></div>
+        <div class="cat-dot" style="background:var(--c-${cat.color});position:relative">${catNeedsAttention?'<span class="cat-attention-dot"></span>':''}</div>
         <div class="cat-name">${cat.name}</div>
         <div class="cat-count">${doneCount}/${goals.length}</div>
         <button class="subgroup-rename-btn" style="font-size:15px;opacity:0.8" onclick="setTab('milestones__${cat.id}')" title="View milestones for this category">🏅</button>
@@ -2327,7 +2356,6 @@ function openGoalModal(id = null, defaultCat = null) {
     document.getElementById('f-sc-first').value = g.deadline || todayKey();
     document.getElementById('f-sc-interval').value = 30;
     document.getElementById('f-sc-unit').value = 'days';
-    document.getElementById('f-milestone').checked = g.isMilestone || false;
     populateSubgroupSelect(g.category, g.subgroup);
   } else {
     document.getElementById('goalModalTitle').textContent = 'Add Goal';
@@ -2342,7 +2370,6 @@ function openGoalModal(id = null, defaultCat = null) {
     document.getElementById('f-scheduled').checked = false;
     document.getElementById('f-schedule-fields').style.display = 'none';
     document.getElementById('f-sc-first').value = todayKey();
-    document.getElementById('f-milestone').checked = false;
     populateSubgroupSelect(catId, null);
   }
   document.getElementById('goalModalOverlay').classList.add('show');
@@ -2420,7 +2447,6 @@ function saveGoal() {
     time: document.getElementById('f-time').value,
     points: parseInt(document.getElementById('f-points').value) || 0,
     isToday: document.getElementById('f-today').checked,
-    isMilestone: document.getElementById('f-milestone').checked,
     subgroup: subgroupVal || undefined,
   };
   if (!data.subgroup) delete data.subgroup;
@@ -2709,6 +2735,21 @@ function setDashboardMonth(monthIdx) { dashboardMonth = monthIdx; renderMain(); 
 // Computes the % of today's relevant goals/actions that are actually done.
 // "Relevant to today" reuses the same logic as the Today page: isToday flag,
 // deadline === today, or a spanning goal whose window includes today.
+// Returns true if a category has anything due/overdue today — used for the
+// red attention-dot shown on the category header in the Goals list.
+function categoryHasTodayOrOverdue(catId) {
+  const today = todayKey();
+  return state.goals.some(g => {
+    if (g.category !== catId || g.done) return false;
+    if (isForToday(g)) return true;
+    if (g.deadline && g.deadline < today) return true; // overdue goal
+    return (g.actions||[]).some(a => {
+      if (a.recurring && a.occurrences) return a.occurrences.some(o => o.date <= today && !o.done);
+      return !a.done && a.deadline && a.deadline <= today;
+    });
+  });
+}
+
 function computeTodayCompletionPct() {
   const today = todayKey();
   let totalItems = 0, doneItems = 0;
@@ -2735,7 +2776,10 @@ function computeTodayCompletionPct() {
     }
   });
 
-  if (totalItems === 0) return 100; // nothing scheduled today = nothing to fall short on
+  // Return -1 (no items) rather than defaulting to 100% — an empty day should
+  // NOT silently satisfy the "80% of today's goals" signal. The caller decides
+  // how to treat "nothing scheduled" (see computeDestinyScore signal 1 below).
+  if (totalItems === 0) return -1;
   return Math.round((doneItems / totalItems) * 100);
 }
 
@@ -2744,8 +2788,16 @@ function computeDestinyScore() {
   let signals = [];
 
   // 1. Did I complete at least 80% of today's scheduled goals/actions?
+  // If NOTHING was scheduled for today at all, this signal is NOT auto-met —
+  // it only counts if the person actually had tasks and did most of them,
+  // OR they proactively logged some activity today (dailyLog > 0) despite
+  // having nothing formally scheduled.
   const todayPct = computeTodayCompletionPct();
-  signals.push({ label: 'Completed at least 80% of today\'s goals', met: todayPct >= 80 });
+  const hadNothingScheduled = todayPct === -1;
+  const metGoalsSignal = hadNothingScheduled
+    ? (state.dailyLog[today]||0) > 0   // no scheduled items, but did something anyway
+    : todayPct >= 80;
+  signals.push({ label: 'Completed at least 80% of today\'s goals', met: metGoalsSignal });
 
   // 2. Did I do a daily check-in today?
   const checkin = state.dailyCheckins[today];
@@ -2952,7 +3004,6 @@ function suggestJourneyLevels(cat, sg, sgGoals) {
     title: b.title,
     desc: b.desc,
     linkedGoalUids: b.goals.map(g => g.uid).filter(Boolean),
-    streakTarget: 0,
     completedManually: false,
     completedDate: null,
     suggested: true,
@@ -2966,15 +3017,6 @@ function getLevelStatus(level, catId) {
     state.goals.find(g => g.uid === uid) || state.goalHistory.find(g => g.uid === uid)
   ).filter(Boolean);
   if (linkedGoals.length && linkedGoals.every(g => g.done)) return 'complete';
-  // Streak target met
-  if (level.streakTarget && level.streakTarget > 0) {
-    if (computeCategoryStreak(catId) >= level.streakTarget) return 'complete';
-  }
-  // Scheduled goal occurrence target met — count completed instances in this category
-  if (level.occurrenceTarget && level.occurrenceTarget > 0) {
-    const completedInstances = state.goalHistory.filter(g => g.category === catId && g.scheduledId).length;
-    if (completedInstances >= level.occurrenceTarget) return 'complete';
-  }
   return 'active';
 }
 
@@ -3031,21 +3073,19 @@ function renderJourneyPage(jKey) {
   const catColor = `var(--c-${cat.color})`;
   const categoryStreak = computeCategoryStreak(catId);
 
-  // Compute level statuses in order — a level is only "active" if all prior are complete
-  const statuses = [];
-  let lastCompletedIdx = -1;
-  levels.forEach((lv, i) => {
-    const s = getLevelStatus(lv, catId);
-    if (s === 'complete') lastCompletedIdx = i;
-    statuses.push(s);
+  // Compute level statuses — each level's status is now independent, not
+  // strictly sequential. A level can be completed out of order; "locked" only
+  // applies visually to levels with zero progress AND nothing before them started.
+  const statuses = levels.map(lv => getLevelStatus(lv, catId));
+  // A level shows as "active" if it's not complete and has some linked-goal progress
+  // OR it's simply the earliest incomplete level (so there's always a clear "next").
+  const firstIncompleteIdx = statuses.findIndex(s => s !== 'complete');
+  statuses.forEach((s, i) => {
+    if (s === 'complete') return;
+    const progress = getLevelProgress(levels[i]);
+    if (progress.done > 0 || i === firstIncompleteIdx) statuses[i] = 'active';
+    else statuses[i] = 'available'; // NOT locked — just not yet started; still workable
   });
-  // Re-lock anything after the first non-complete
-  let foundActive = false;
-  for (let i = 0; i < statuses.length; i++) {
-    if (statuses[i] === 'complete') continue;
-    if (!foundActive) { statuses[i] = 'active'; foundActive = true; }
-    else { statuses[i] = 'locked'; }
-  }
 
   const completedCount = statuses.filter(s => s === 'complete').length;
   const totalLevels = levels.length;
@@ -3076,14 +3116,18 @@ function renderJourneyPage(jKey) {
       const progress = getLevelProgress(lv);
       const badge = status === 'complete' ? '<span class="journey-level-badge badge-complete">✓ Complete</span>'
                   : status === 'active'   ? '<span class="journey-level-badge badge-active">● In Progress</span>'
-                  :                         '<span class="journey-level-badge badge-locked">🔒 Locked</span>';
+                  :                         '<span class="journey-level-badge" style="background:var(--surface2);color:var(--ink3)">Not started</span>';
 
-      html += `<div class="journey-level ${status}">
+      html += `<div class="journey-level ${status==='complete'?'complete':status==='active'?'active':''}">
         <div class="journey-level-dot"></div>
         <div class="journey-level-card">
           <div class="journey-level-header">
-            <div>
-              <div class="journey-level-num">Level ${i+1}</div>
+            <div style="flex:1">
+              <div style="display:flex;align-items:center;gap:6px">
+                <button class="subgroup-rename-btn" style="padding:1px 4px;font-size:12px;${i===0?'opacity:0.25;pointer-events:none':''}" onclick="reorderJourneyLevel('${jKey}',${i},-1)" title="Move up">▲</button>
+                <button class="subgroup-rename-btn" style="padding:1px 4px;font-size:12px;${i===levels.length-1?'opacity:0.25;pointer-events:none':''}" onclick="reorderJourneyLevel('${jKey}',${i},1)" title="Move down">▼</button>
+                <div class="journey-level-num">Level ${i+1}</div>
+              </div>
               <div class="journey-level-title">${escapeHtml(lv.title)}</div>
             </div>
             ${badge}
@@ -3097,19 +3141,14 @@ function renderJourneyPage(jKey) {
         lv.linkedGoalUids.forEach(uid => {
           const g = state.goals.find(x => x.uid === uid) || state.goalHistory.find(x => x.uid === uid);
           if (!g) return;
-          html += `<span class="journey-goal-chip ${g.done?'done':''}" onclick="${g.done?'':(`setTab('${catId}')`)}">${g.done?'✓ ':''} ${escapeHtml(g.title)}</span>`;
+          html += `<span class="journey-goal-chip ${g.done?'done':''}" ${g.notes?`title="${escapeHtml(g.notes)}"`:''}>${g.done?'✓ ':''} ${escapeHtml(g.title)}${g.notes?' 📝':''}</span>`;
         });
         html += `</div>`;
       }
 
-      // Streak target chip
-      if (lv.streakTarget > 0) {
-        const met = categoryStreak >= lv.streakTarget;
-        html += `<span class="journey-goal-chip streak">${met?'✓':('🔥')} ${lv.streakTarget}-day streak ${met?'achieved!':'milestone'}</span>`;
-      }
 
-      // Progress bar (only for active levels with linked goals)
-      if (status === 'active' && progress.total > 0) {
+      // Progress bar
+      if (status !== 'complete' && progress.total > 0) {
         html += `<div class="journey-progress-row">
           <div class="journey-progress-bg"><div class="journey-progress-fill" style="width:${progress.pct}%;background:${catColor}"></div></div>
           <div class="journey-progress-text">${progress.done}/${progress.total} goals</div>
@@ -3123,27 +3162,35 @@ function renderJourneyPage(jKey) {
       } else {
         html += `<button class="btn btn-ghost" style="font-size:11px;padding:5px 10px" onclick="unmarkJourneyLevelComplete('${jKey}',${i})">↩ Undo</button>`;
       }
-      if (status !== 'locked') {
-        html += `<button class="btn btn-ghost" style="font-size:11px;padding:5px 10px" onclick="openEditJourneyLevel('${jKey}',${i})">✎ Edit</button>`;
-      }
+      html += `<button class="btn btn-ghost" style="font-size:11px;padding:5px 10px" onclick="openEditJourneyLevel('${jKey}',${i})">✎ Edit</button>`;
+      html += `<button class="btn btn-ghost" style="font-size:11px;padding:5px 10px" onclick="openLinkGoalsToLevel('${jKey}',${i})">🎯 Link Goals</button>`;
       html += `<button class="btn btn-ghost" style="font-size:11px;padding:5px 10px;color:var(--danger)" onclick="deleteJourneyLevel('${jKey}',${i})">✕</button>`;
       html += `</div></div></div>`; // close card + level
     });
     html += `</div>`; // close journey-path
   }
 
-  // Manage goals link + Add level button
-  html += `<div style="margin-top:20px;display:flex;gap:8px;flex-wrap:wrap">
-    <button class="btn btn-primary" style="flex:1" onclick="openAddJourneyLevel('${jKey}','${catId}','${sgId}')">+ Add Level</button>
-    <button class="btn btn-ghost" style="flex:1" onclick="openLinkGoalsToLevel('${jKey}')">🎯 Link Goals</button>
+  // Add level button
+  html += `<div style="margin-top:20px">
+    <button class="btn btn-primary" style="width:100%" onclick="openAddJourneyLevel('${jKey}','${catId}','${sgId}')">+ Add Level</button>
   </div>`;
 
   return html;
 }
 
+function reorderJourneyLevel(jKey, idx, direction) {
+  const levels = state.journeys[jKey].levels;
+  const newIdx = idx + direction;
+  if (newIdx < 0 || newIdx >= levels.length) return;
+  [levels[idx], levels[newIdx]] = [levels[newIdx], levels[idx]];
+  saveState();
+  renderMain();
+}
+
 function markJourneyLevelComplete(jKey, idx) {
   const levels = state.journeys[jKey].levels;
   const lv = levels[idx];
+
   lv.completedManually = true;
   lv.completedDate = todayKey();
 
@@ -3164,19 +3211,15 @@ function markJourneyLevelComplete(jKey, idx) {
 
   // Auto-pin as milestone
   pinAsMilestone(`journey-${jKey}-${idx}`, lvLabel, todayKey(), catId);
-
   saveState();
 
-  // Show celebration overlay
   showMilestoneCelebration(lv.title, pts, cat, idx);
-
   renderMain();
 }
 
 function showMilestoneCelebration(levelTitle, pts, cat, levelIdx) {
   const tierLabel = pts >= 50 ? '🥇 Big Milestone' : pts >= 25 ? '🥈 Milestone' : '🥉 Small Milestone';
   const emoji = pts >= 50 ? '🎉' : pts >= 25 ? '🏆' : '⭐';
-  // Reuse the completion overlay with milestone styling
   document.getElementById('completionEmoji').textContent = emoji;
   document.getElementById('completionTitle').textContent = levelTitle;
   document.getElementById('completionSub').textContent = cat ? `${cat.name} journey` : 'Journey milestone achieved';
@@ -3204,8 +3247,6 @@ function openAddJourneyLevel(jKey, catId, sgId) {
   document.getElementById('journeyLevelModalTitle').textContent = 'Add Level';
   document.getElementById('jl-title').value = '';
   document.getElementById('jl-desc').value = '';
-  document.getElementById('jl-streak').value = '';
-  document.getElementById('jl-occurrences').value = '';
   document.getElementById('jl-tier').value = '25';
   document.getElementById('journeyLevelModalOverlay').classList.add('show');
   setTimeout(() => document.getElementById('jl-title').focus(), 100);
@@ -3218,8 +3259,6 @@ function openEditJourneyLevel(jKey, idx) {
   document.getElementById('journeyLevelModalTitle').textContent = 'Edit Level';
   document.getElementById('jl-title').value = lv.title;
   document.getElementById('jl-desc').value = lv.desc || '';
-  document.getElementById('jl-streak').value = lv.streakTarget || '';
-  document.getElementById('jl-occurrences').value = lv.occurrenceTarget || '';
   document.getElementById('jl-tier').value = lv.tier || 25;
   document.getElementById('journeyLevelModalOverlay').classList.add('show');
   setTimeout(() => document.getElementById('jl-title').focus(), 100);
@@ -3230,21 +3269,18 @@ function saveJourneyLevel() {
   if (!title) { showToast('Please enter a title'); return; }
   if (!state.journeys[editJourneyKey]) state.journeys[editJourneyKey] = { levels: [] };
   const levels = state.journeys[editJourneyKey].levels;
-  const streakVal = parseInt(document.getElementById('jl-streak').value) || 0;
-  const occurrenceVal = parseInt(document.getElementById('jl-occurrences').value) || 0;
   const tier = parseInt(document.getElementById('jl-tier').value) || 25;
 
   if (editJourneyLevelIdx !== null) {
     Object.assign(levels[editJourneyLevelIdx], {
       title, desc: document.getElementById('jl-desc').value.trim(),
-      streakTarget: streakVal, occurrenceTarget: occurrenceVal, tier,
+      tier,
     });
   } else {
     levels.push({
       id: state.nextJourneyLevelId++, title,
       desc: document.getElementById('jl-desc').value.trim(),
-      linkedGoalUids: [], streakTarget: streakVal,
-      occurrenceTarget: occurrenceVal, tier,
+      linkedGoalUids: [], tier,
       completedManually: false, completedDate: null,
     });
   }
@@ -3261,41 +3297,103 @@ async function deleteJourneyLevel(jKey, idx) {
   saveState(); renderMain();
 }
 
-// Link Goals to a level — opens a checklist of subgroup goals
-function openLinkGoalsToLevel(jKey) {
+// Link Goals to a specific level — opens a real checklist picker
+let linkGoalsJKey = null, linkGoalsLevelIdx = null;
+
+function openLinkGoalsToLevel(jKey, levelIdx) {
   const [catId, sgId] = jKey.split('__');
   const sg = state.categories.find(c=>c.id===catId)?.subgroups?.find(s=>s.id===sgId);
-  const sgGoals = state.goals.filter(g => g.category === catId && g.subgroup === sgId);
+  const sgGoals = state.goals.filter(g => g.category === catId && g.subgroup === sgId && g.uid);
   const journey = state.journeys[jKey];
-  if (!journey || !journey.levels.length) { showToast('Add levels first'); return; }
+  if (!journey || !journey.levels.length) { showToast('Add a level first'); return; }
 
-  // Build a simple modal-like approach using the existing appConfirm pattern
-  // For now: auto-distribute unlinked goals across levels evenly
-  const allLinkedUids = new Set(journey.levels.flatMap(l => l.linkedGoalUids));
-  const unlinked = sgGoals.filter(g => g.uid && !allLinkedUids.has(g.uid));
-  if (!unlinked.length) { showToast('All goals in this subgroup are already linked to levels'); return; }
+  linkGoalsJKey = jKey;
+  linkGoalsLevelIdx = levelIdx;
+  const level = journey.levels[levelIdx];
+  const linkedSet = new Set(level.linkedGoalUids || []);
 
-  // Distribute unlinked goals across levels that need them
-  unlinked.forEach((g, i) => {
-    const targetLevel = journey.levels[i % journey.levels.length];
-    if (g.uid) targetLevel.linkedGoalUids.push(g.uid);
-  });
-  saveState(); renderMain();
-  showToast(`✓ Linked ${unlinked.length} goal${unlinked.length!==1?'s':''} to levels`);
+  const listEl = document.getElementById('linkGoalsList');
+  if (!sgGoals.length) {
+    listEl.innerHTML = `<div style="font-size:13px;color:var(--ink3);text-align:center;padding:20px 0">No goals in this subgroup yet. Add goals to "${escapeHtml(sg?.name||'')}" first.</div>`;
+  } else {
+    listEl.innerHTML = sgGoals.map(g => {
+      // Show which OTHER level (if any) this goal is currently linked to
+      const otherLevel = journey.levels.find((lv, i) => i !== levelIdx && (lv.linkedGoalUids||[]).includes(g.uid));
+      return `<label style="display:flex;align-items:flex-start;gap:10px;padding:9px 4px;border-bottom:1px solid var(--surface2);cursor:pointer">
+        <input type="checkbox" data-goal-uid="${g.uid}" ${linkedSet.has(g.uid)?'checked':''} style="width:18px;height:18px;margin-top:1px;flex-shrink:0">
+        <div style="flex:1">
+          <div style="font-size:13px;color:${g.done?'var(--ink3)':'var(--ink)'};${g.done?'text-decoration:line-through':''}">${escapeHtml(g.title)}</div>
+          ${g.notes ? `<div style="font-size:11px;color:var(--ink3);margin-top:2px;font-style:italic">${escapeHtml(g.notes)}</div>` : ''}
+          ${otherLevel ? `<div style="font-size:10.5px;color:var(--c-social);margin-top:2px">Currently in: ${escapeHtml(otherLevel.title)}</div>` : ''}
+        </div>
+      </label>`;
+    }).join('');
+  }
+
+  document.getElementById('linkGoalsModalOverlay').classList.add('show');
 }
 
-// Check scheduled goal completion counts for streak milestones
-function checkScheduledMilestones() {
-  if (!state.journeys) return;
-  Object.entries(state.journeys).forEach(([jKey, journey]) => {
-    const [catId] = jKey.split('__');
-    const streak = computeCategoryStreak(catId);
-    (journey.levels||[]).forEach((lv, idx) => {
-      if (lv.streakTarget && streak >= lv.streakTarget && !lv.completedDate && !lv.completedManually) {
-        markJourneyLevelComplete(jKey, idx);
-      }
-    });
+function saveLinkedGoals() {
+  const journey = state.journeys[linkGoalsJKey];
+  const level = journey.levels[linkGoalsLevelIdx];
+  const checked = [...document.querySelectorAll('#linkGoalsList input[type=checkbox]:checked')].map(el => el.dataset.goalUid);
+
+  // Remove these goals from any OTHER level first (a goal belongs to one level at a time)
+  journey.levels.forEach((lv, i) => {
+    if (i === linkGoalsLevelIdx) return;
+    lv.linkedGoalUids = (lv.linkedGoalUids||[]).filter(uid => !checked.includes(uid));
   });
+  level.linkedGoalUids = checked;
+
+  saveState();
+  closeModal('linkGoalsModalOverlay');
+  renderMain();
+  showToast(`✓ Linked ${checked.length} goal${checked.length!==1?'s':''} to this level`);
+}
+
+// Checks each active scheduled goal's completion count against its own
+// milestoneCount setting (if any). Every time the count is hit, celebrates
+// and restarts the cycle — e.g. "every 10 completions of Exercise = milestone".
+function checkScheduledMilestones() {
+  (state.scheduledGoals||[]).forEach(sc => {
+    if (!sc.active || !sc.milestoneCount || sc.milestoneCount <= 0) return;
+    const totalCompletions = state.goalHistory.filter(g => g.scheduledId === sc.id).length;
+    const cyclesReached = Math.floor(totalCompletions / sc.milestoneCount);
+    const cyclesCelebrated = sc.milestoneCyclesCelebrated || 0;
+    if (cyclesReached > cyclesCelebrated) {
+      celebrateScheduledMilestone(sc, cyclesReached);
+    }
+  });
+}
+
+function celebrateScheduledMilestone(sc, cycleNumber) {
+  sc.milestoneCyclesCelebrated = cycleNumber;
+  const pts = sc.milestonePoints || 25;
+  const cat = state.categories.find(c => c.id === sc.category);
+  const label = `🔄 ${sc.title} — completed ${sc.milestoneCount}× (cycle #${cycleNumber})`;
+
+  state.goalHistory.push({
+    id: state.nextGoalId++, uid: newUID(),
+    title: `🏅 ${label}`,
+    category: sc.category,
+    deadline: todayKey(), completedDate: todayKey(),
+    points: pts, done: true, actions: [], isMilestoneReward: true,
+  });
+
+  pinAsMilestone(`sched-milestone-${sc.id}-cycle${cycleNumber}`, label, todayKey(), sc.category);
+  saveState();
+
+  // Celebration popup
+  document.getElementById('completionEmoji').textContent = '🎉';
+  document.getElementById('completionTitle').textContent = `${sc.title} — ${sc.milestoneCount}× complete!`;
+  document.getElementById('completionSub').textContent = cat ? cat.name : '';
+  document.getElementById('completionList').innerHTML = `
+    <div class="completion-list-item" style="font-size:14px;font-weight:600;color:var(--accent)">+${pts} pts earned!</div>
+    <div class="completion-list-item" style="color:var(--c-health)">🔄 Cycle #${cycleNumber} complete — count restarts!</div>
+    <div class="completion-list-item" style="color:var(--ink3);font-size:12px">Pinned to your Milestones page</div>
+  `;
+  document.getElementById('completionPts').textContent = '';
+  document.getElementById('completionOverlay').classList.add('show');
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -3430,12 +3528,7 @@ function renderMilestonesPage(filterCatId = null) {
     html += `<div class="heatmap-sub" style="margin-bottom:14px">No pinned milestones yet — pin completions from History, or add one manually above.</div>`;
   }
 
-  // Recent completions (unpinned)
-  const filteredCompleted = recentCompleted.filter(g =>
-    !pinnedUids.has(String(g.uid||g.id)) && (activeCat === 'all' || g.category === activeCat)
-  );
-  if (filteredCompleted.length) {
-  // ── ACHIEVED JOURNEY MILESTONES timeline ──
+  // ── ACHIEVED MILESTONES timeline (journey levels + scheduled goal cycles) ──
   const achievedLevels = [];
   if (state.journeys) {
     Object.entries(state.journeys).forEach(([jKey, journey]) => {
@@ -3444,16 +3537,22 @@ function renderMilestonesPage(filterCatId = null) {
       const sg = cat2?.subgroups?.find(s => s.id === sgId);
       (journey.levels||[]).forEach((lv, idx) => {
         if ((lv.completedManually || lv.completedDate) && (activeCat === 'all' || catId === activeCat)) {
-          achievedLevels.push({ lv, idx, cat2, sg, catId });
+          achievedLevels.push({ type: 'journey', lv, idx, cat2, sg, catId, date: lv.completedDate });
         }
       });
     });
   }
-  achievedLevels.sort((a,b) => (b.lv.completedDate||'').localeCompare(a.lv.completedDate||''));
+  // Scheduled goal milestone cycles — pull from goalHistory rewards
+  const scheduledMilestoneRewards = state.goalHistory.filter(g =>
+    g.isMilestoneReward && g.title.includes('🔄') && (activeCat === 'all' || g.category === activeCat)
+  );
 
-  if (achievedLevels.length) {
+  achievedLevels.sort((a,b) => (b.date||'').localeCompare(a.date||''));
+
+  if (achievedLevels.length || scheduledMilestoneRewards.length) {
     html += `<div class="heatmap-title" style="margin:16px 0 4px">🎖️ Milestones Achieved</div>
-    <div class="heatmap-sub" style="margin-bottom:10px">Every journey level you've completed — your proof of progress over time.</div>`;
+    <div class="heatmap-sub" style="margin-bottom:10px">Every level and scheduled-goal cycle you've completed — your proof of progress over time.</div>`;
+
     achievedLevels.forEach(({ lv, idx, cat2, sg }) => {
       const pts = lv.tier || 25;
       const tierLabel = pts >= 50 ? '🥇 Big' : pts >= 25 ? '🥈 Medium' : '🥉 Small';
@@ -3470,8 +3569,29 @@ function renderMilestonesPage(filterCatId = null) {
         </div>
       </div>`;
     });
+
+    scheduledMilestoneRewards.slice().reverse().forEach(g => {
+      const catObj = state.categories.find(c => c.id === g.category);
+      const dl = g.completedDate ? new Date(g.completedDate).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '';
+      const cleanTitle = g.title.replace('🏅 ', '');
+      html += `<div class="milestone-card milestone-pinned">
+        <div class="milestone-top">
+          <div class="milestone-icon">${g.points >= 50 ? '🎉' : g.points >= 25 ? '🏆' : '⭐'}</div>
+          <div class="milestone-body">
+            <div class="milestone-title">${escapeHtml(cleanTitle)}</div>
+            <div class="milestone-date">${dl} · +${g.points}pts</div>
+            ${catObj ? `<span class="milestone-cat-tag" style="background:var(--c-${catObj.color}-l);color:var(--c-${catObj.color})">${escapeHtml(catObj.name)}</span>` : ''}
+          </div>
+        </div>
+      </div>`;
+    });
   }
 
+  // Recent completions (unpinned)
+  const filteredCompleted = recentCompleted.filter(g =>
+    !pinnedUids.has(String(g.uid||g.id)) && (activeCat === 'all' || g.category === activeCat)
+  );
+  if (filteredCompleted.length) {
     html += `<div class="heatmap-title" style="margin:16px 0 6px">✅ Recent Completions</div>
     <div class="heatmap-sub" style="margin-bottom:10px">Pin the ones worth remembering.</div>`;
     filteredCompleted.slice(0,15).forEach(g => {
@@ -3546,31 +3666,55 @@ function renderHistoryPage() {
     return html;
   }
 
+  // Group by completion day
+  const byDay = {};
   items.forEach(g => {
-    const cat = state.categories.find(c => c.id === g.category);
-    const dateLabel = g.completedDate ? new Date(g.completedDate).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '';
-    html += `<div class="history-card">
-      <div class="history-top">
-        <div class="history-badge">✅</div>
-        <div class="history-body">
-          <div class="history-title">${escapeHtml(g.title)}</div>
-          <div class="history-meta">
-            ${cat ? `<span class="history-cat-tag" style="background:var(--c-${cat.color}-l);color:var(--c-${cat.color})">${escapeHtml(cat.name)}</span>` : ''}
-            <span>Completed ${dateLabel}</span>
-            <span class="goal-pts">+${goalPoints(g)} pts</span>
-            ${g.uid && getLocationHistory(g.uid).length ? `<span class="journey-tag" onclick="showJourneyPopup('${g.uid}','${escapeHtml(g.title).replace(/'/g,"\\'")}')">📍 Journey</span>` : ''}
-          </div>
-          ${g.actions && g.actions.length ? `<div class="history-actions-list">${g.actions.map(a => a.recurring
-              ? `<div class="history-action-item">🔁 ${escapeHtml(a.text)} — ${a.occurrences.filter(o=>o.done).length}/${a.occurrences.length} days (+${actionEarnedPoints(a)}pts)</div>`
-              : `<div class="history-action-item">✓ ${escapeHtml(a.text)} (+${a.points||0}pts)</div>`
-            ).join('')}</div>` : ''}
-        </div>
-        <div class="history-actions">
-          <button onclick="duplicateGoal(${g.id})">⧉ Reuse</button>
-          <button onclick="pinAsMilestone('${g.uid||g.id}','${escapeHtml(g.title).replace(/'/g,"\\'")}','${g.completedDate||''}','${g.category||''}')" title="Pin as milestone">🏅 Pin</button>
-        </div>
-      </div>
+    const dKey = g.completedDate ? g.completedDate.slice(0,10) : 'unknown';
+    if (!byDay[dKey]) byDay[dKey] = [];
+    byDay[dKey].push(g);
+  });
+  const sortedDays = Object.keys(byDay).sort((a,b) => b.localeCompare(a));
+  const today = todayKey();
+  const yesterday = dateKey(new Date(new Date().setDate(new Date().getDate()-1)));
+
+  sortedDays.forEach(dKey => {
+    const dayItems = byDay[dKey];
+    let dayLabel;
+    if (dKey === today) dayLabel = 'Today';
+    else if (dKey === yesterday) dayLabel = 'Yesterday';
+    else if (dKey === 'unknown') dayLabel = 'Undated';
+    else dayLabel = new Date(dKey).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+
+    const dayPts = dayItems.reduce((s,g)=>s+goalPoints(g),0);
+    html += `<div style="display:flex;align-items:center;justify-content:space-between;margin:14px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--border)">
+      <div style="font-size:13px;font-weight:700;color:var(--ink2)">${dayLabel}</div>
+      <div style="font-size:11.5px;color:var(--ink3)">${dayItems.length} item${dayItems.length!==1?'s':''} · +${dayPts}pts</div>
     </div>`;
+
+    dayItems.forEach(g => {
+      const cat = state.categories.find(c => c.id === g.category);
+      html += `<div class="history-card">
+        <div class="history-top">
+          <div class="history-badge">✅</div>
+          <div class="history-body">
+            <div class="history-title">${escapeHtml(g.title)}</div>
+            <div class="history-meta">
+              ${cat ? `<span class="history-cat-tag" style="background:var(--c-${cat.color}-l);color:var(--c-${cat.color})">${escapeHtml(cat.name)}</span>` : ''}
+              <span class="goal-pts">+${goalPoints(g)} pts</span>
+              ${g.uid && getLocationHistory(g.uid).length ? `<span class="journey-tag" onclick="showJourneyPopup('${g.uid}','${escapeHtml(g.title).replace(/'/g,"\\'")}')">📍 Journey</span>` : ''}
+            </div>
+            ${g.actions && g.actions.length ? `<div class="history-actions-list">${g.actions.map(a => a.recurring
+                ? `<div class="history-action-item">🔁 ${escapeHtml(a.text)} — ${a.occurrences.filter(o=>o.done).length}/${a.occurrences.length} days (+${actionEarnedPoints(a)}pts)</div>`
+                : `<div class="history-action-item">✓ ${escapeHtml(a.text)} (+${a.points||0}pts)</div>`
+              ).join('')}</div>` : ''}
+          </div>
+          <div class="history-actions">
+            <button onclick="duplicateGoal(${g.id})">⧉ Reuse</button>
+            <button onclick="pinAsMilestone('${g.uid||g.id}','${escapeHtml(g.title).replace(/'/g,"\\'")}','${g.completedDate||''}','${g.category||''}')" title="Pin as milestone">🏅 Pin</button>
+          </div>
+        </div>
+      </div>`;
+    });
   });
 
   return html;
@@ -3779,20 +3923,20 @@ function getItemsInRange(rangeStart, rangeEnd) {
 const TASK_HORIZONS = [
   { id: 'today',    label: 'Today',      days: 0 },
   { id: 'tomorrow', label: 'Tomorrow',   days: 1, exact: true },
-  { id: 'week',     label: 'This Week',  days: 7 },
+  { id: 'week',     label: 'This Week',  days: 0, calWeek: true }, // Sun–Sat calendar week
   { id: 'month',    label: 'This Month', days: 30 },
-  { id: 'range',    label: 'Date Range', days: 0 }, // custom month range
+  { id: 'range',    label: 'Date Range', days: 0, isRange: true },
 ];
 let taskHorizon = 'today';
 let calendarMonth = new Date().getMonth();
 let calendarYear = new Date().getFullYear();
 let calendarSelectedDay = null;
-
-// Range picker state — user picks start/end month
+// Range picker state
 let rangeStartMonth = new Date().getMonth();
 let rangeStartYear = new Date().getFullYear();
 let rangeEndMonth = new Date().getMonth();
 let rangeEndYear = new Date().getFullYear();
+let rangeCalSelectedDay = null;
 
 function setTaskHorizon(id) {
   taskHorizon = id;
@@ -3802,85 +3946,6 @@ function setTaskHorizon(id) {
     calendarYear = new Date().getFullYear();
   }
   renderMain();
-}
-
-// ── PROJECTED TASKS ──────────────────────────────────────────────
-// Returns all tasks (goals, actions, scheduled projections) for a date range.
-// KEY FIX: also looks at scheduledGoals templates to project future occurrences
-// that haven't been spawned yet (e.g. pedicure every 30 days, due next Tuesday)
-function getProjectedTaskMap(rangeStart, rangeEnd) {
-  // dayTaskMap: dateKey -> { count, hasScheduled, items[] }
-  const map = {};
-
-  function addItem(dKey, item, isScheduled = false) {
-    if (dKey < rangeStart || dKey > rangeEnd) return;
-    if (!map[dKey]) map[dKey] = { count:0, hasScheduled:false, items:[] };
-    map[dKey].count++;
-    map[dKey].items.push(item);
-    if (isScheduled) map[dKey].hasScheduled = true;
-  }
-
-  // 1. Regular goals in state.goals
-  state.goals.forEach(g => {
-    if (g.done) return;
-    if (g.isToday && rangeStart <= todayKey() && rangeEnd >= todayKey()) {
-      addItem(todayKey(), { goal:g, actionText:null, isScheduled:!!g.scheduledId });
-    }
-    // Spanning goals — show on each day of their window within range
-    if (g.startDate && g.deadline) {
-      const start = g.startDate > rangeStart ? g.startDate : rangeStart;
-      const end = g.deadline < rangeEnd ? g.deadline : rangeEnd;
-      if (start <= end) {
-        let cur = new Date(start);
-        while (dateKey(cur) <= end) {
-          addItem(dateKey(cur), { goal:g, actionText:null, isScheduled:!!g.scheduledId }, !!g.scheduledId);
-          cur.setDate(cur.getDate()+1);
-          if (dateKey(cur) > end) break;
-        }
-      }
-    } else if (g.deadline) {
-      addItem(g.deadline, { goal:g, actionText:null, isScheduled:!!g.scheduledId }, !!g.scheduledId);
-    }
-    // Actions
-    (g.actions||[]).forEach(a => {
-      if (a.recurring && a.occurrences) {
-        a.occurrences.filter(o => o.date >= rangeStart && o.date <= rangeEnd && !o.done).forEach(occ => {
-          addItem(occ.date, { goal:g, actionText:a.text, occDate:occ.date, actionId:a.id, isScheduled:!!g.scheduledId }, !!g.scheduledId);
-        });
-      } else if (!a.done && a.deadline && a.deadline >= rangeStart && a.deadline <= rangeEnd) {
-        addItem(a.deadline, { goal:g, actionText:a.text, actionId:a.id, isScheduled:!!g.scheduledId }, !!g.scheduledId);
-      }
-    });
-  });
-
-  // 2. Scheduled goal TEMPLATES — project future occurrences not yet spawned
-  (state.scheduledGoals||[]).forEach(sc => {
-    if (!sc.active) return;
-    const stepDays = intervalToDays(sc.interval, sc.unit);
-    let cursor = new Date(sc.firstDue);
-    let safeguard = 0;
-    while (safeguard++ < 1000) {
-      const dKey = dateKey(cursor);
-      if (dKey > rangeEnd) break;
-      if (dKey >= rangeStart) {
-        // Only add if not already spawned (spawned instances already in state.goals above)
-        const alreadySpawned = state.goals.find(g => g.scheduledId === sc.id && g.scheduledDue === dKey)
-          || state.goalHistory.find(g => g.scheduledId === sc.id && g.scheduledDue === dKey);
-        if (!alreadySpawned) {
-          const cat = state.categories.find(c => c.id === sc.category);
-          addItem(dKey, {
-            goal: { id: 0, uid: `sc_proj_${sc.id}_${dKey}`, title: sc.title, category: sc.category, scheduledId: sc.id, done: false },
-            actionText: null,
-            isScheduled: true,
-            isProjected: true, // not yet spawned — future projection
-          }, true);
-        }
-      }
-      cursor.setDate(cursor.getDate() + stepDays);
-    }
-  });
-
-  return map;
 }
 
 function navCalendar(delta) {
@@ -3896,71 +3961,99 @@ function selectCalDay(dateKeyStr) {
   renderMain();
 }
 
-function renderMonthCalendar() {
-  const today = todayKey();
-  const firstDay = new Date(calendarYear, calendarMonth, 1);
-  const lastDay = new Date(calendarYear, calendarMonth + 1, 0);
-  const monthStart = dateKey(firstDay);
-  const monthEnd = dateKey(lastDay);
-  const monthName = firstDay.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
-
-  // Use unified projected task map (includes scheduled templates)
-  const dayTaskMap = getProjectedTaskMap(monthStart, monthEnd);
-
-  let html = `<div class="cal-header">
-    <button class="cal-nav-btn" onclick="navCalendar(-1)">‹</button>
-    <div class="cal-title">${monthName}</div>
-    <button class="cal-nav-btn" onclick="navCalendar(1)">›</button>
-  </div>
-  <div class="cal-grid">`;
-
-  ['S','M','T','W','T','F','S'].forEach(d => { html += `<div class="cal-dow">${d}</div>`; });
-
-  const startDow = firstDay.getDay();
-  for (let i = 0; i < startDow; i++) html += `<div class="cal-day empty"></div>`;
-
-  for (let d = 1; d <= lastDay.getDate(); d++) {
-    const dKey = dateKey(new Date(calendarYear, calendarMonth, d));
-    const dayData = dayTaskMap[dKey];
-    const isToday = dKey === today;
-    const isSelected = dKey === calendarSelectedDay;
-    const isPast = dKey < today;
-    const hasTasks = dayData && dayData.count > 0;
-    const hasScheduled = dayData && dayData.hasScheduled;
-
-    let cls = 'cal-day';
-    if (isToday) cls += ' today';
-    if (hasTasks) cls += hasScheduled ? ' has-scheduled' : ' has-tasks';
-    if (isSelected) cls += ' selected';
-    if (isPast && !hasTasks) cls += ' past-empty';
-
-    html += `<div class="${cls}" onclick="selectCalDay('${dKey}')">
-      <div class="cal-day-num">${d}</div>
-      ${hasTasks ? `<div class="cal-day-badge">${dayData.count}</div>` : ''}
-    </div>`;
-  }
-
-  const totalCells = startDow + lastDay.getDate();
-  const remaining = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
-  for (let i = 0; i < remaining; i++) html += `<div class="cal-day empty"></div>`;
-  html += `</div>`;
-
-  html += `<div class="heatmap-legend" style="margin-top:8px;margin-bottom:4px">
-    <div class="cal-day-badge" style="background:var(--accent)">3</div><span>Regular tasks &nbsp;</span>
-    <div class="cal-day-badge" style="background:var(--c-health)">2</div><span>Includes scheduled</span>
-  </div>`;
-
-  // Day detail popup
-  if (calendarSelectedDay) {
-    const selData = dayTaskMap[calendarSelectedDay];
-    const selDate = new Date(calendarSelectedDay).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
-    html += renderDayPopup(calendarSelectedDay, selDate, selData);
-  }
-
-  return html;
+// Returns the Sunday and Saturday of the current calendar week
+function getCurrentWeekRange() {
+  const today = new Date(new Date().toDateString());
+  const dow = today.getDay(); // 0 = Sunday
+  const sunday = new Date(today); sunday.setDate(today.getDate() - dow);
+  const saturday = new Date(sunday); saturday.setDate(sunday.getDate() + 6);
+  return { start: dateKey(sunday), end: dateKey(saturday) };
 }
 
-// Visually appealing day popup used by both calendar views
+// ── PROJECTED TASK MAP ──────────────────────────────────────────
+// Builds dateKey -> {count, hasScheduled, items[]} for a range, including
+// scheduled goal TEMPLATES projected forward even if not yet spawned into
+// state.goals. This is what makes scheduled tasks show up on Tomorrow/Week/etc.
+function getProjectedTaskMap(rangeStart, rangeEnd) {
+  const map = {};
+  function addItem(dKey, item, isScheduled) {
+    if (dKey < rangeStart || dKey > rangeEnd) return;
+    if (!map[dKey]) map[dKey] = { count:0, hasScheduled:false, items:[] };
+    map[dKey].count++;
+    map[dKey].items.push(item);
+    if (isScheduled) map[dKey].hasScheduled = true;
+  }
+
+  state.goals.forEach(g => {
+    if (g.done) return;
+    const isSched = !!g.scheduledId;
+    let addedViaToday = false;
+
+    if (g.isToday && rangeStart <= todayKey() && rangeEnd >= todayKey()) {
+      addItem(todayKey(), { goal:g, actionText:null, isScheduled:isSched }, isSched);
+      addedViaToday = true;
+    }
+    if (g.startDate && g.deadline && g.startDate !== g.deadline) {
+      // Spanning goal — show on each day of window within range
+      const start = g.startDate > rangeStart ? g.startDate : rangeStart;
+      const end = g.deadline < rangeEnd ? g.deadline : rangeEnd;
+      if (start <= end) {
+        let cur = new Date(start);
+        const endD = new Date(end);
+        while (cur <= endD) {
+          const dK = dateKey(cur);
+          // Skip today if it was already added via the isToday branch above
+          if (!(addedViaToday && dK === todayKey())) {
+            addItem(dK, { goal:g, actionText:null, isScheduled:isSched }, isSched);
+          }
+          cur.setDate(cur.getDate()+1);
+        }
+      }
+    } else if (g.deadline) {
+      // Skip if this exact date was already added via the isToday branch
+      if (!(addedViaToday && g.deadline === todayKey())) {
+        addItem(g.deadline, { goal:g, actionText:null, isScheduled:isSched }, isSched);
+      }
+    }
+    (g.actions||[]).forEach(a => {
+      if (a.recurring && a.occurrences) {
+        a.occurrences.filter(o => o.date >= rangeStart && o.date <= rangeEnd && !o.done).forEach(occ => {
+          addItem(occ.date, { goal:g, actionText:a.text, occDate:occ.date, actionId:a.id, isScheduled:isSched }, isSched);
+        });
+      } else if (!a.done && a.deadline && a.deadline >= rangeStart && a.deadline <= rangeEnd) {
+        addItem(a.deadline, { goal:g, actionText:a.text, actionId:a.id, isScheduled:isSched }, isSched);
+      }
+    });
+  });
+
+  // Project scheduled TEMPLATES forward — this is the key fix so future
+  // (not-yet-spawned) scheduled occurrences show up on Tomorrow/Week/Month/Range
+  (state.scheduledGoals||[]).forEach(sc => {
+    if (!sc.active) return;
+    const stepDays = intervalToDays(sc.interval, sc.unit);
+    let cursor = new Date(sc.firstDue);
+    let guard = 0;
+    while (guard++ < 1000) {
+      const dKey = dateKey(cursor);
+      if (dKey > rangeEnd) break;
+      if (dKey >= rangeStart) {
+        const spawned = state.goals.find(g => g.scheduledId === sc.id && g.scheduledDue === dKey)
+          || state.goalHistory.find(g => g.scheduledId === sc.id && g.scheduledDue === dKey);
+        if (!spawned) {
+          addItem(dKey, {
+            goal: { id: 0, uid: `sc_proj_${sc.id}_${dKey}`, title: sc.title, category: sc.category, scheduledId: sc.id, done: false },
+            actionText: null, isScheduled: true, isProjected: true,
+          }, true);
+        }
+      }
+      cursor.setDate(cursor.getDate() + stepDays);
+    }
+  });
+
+  return map;
+}
+
+// Shared visually appealing popup for a single day's tasks
 function renderDayPopup(dKey, dateLabel, dayData) {
   const isToday = dKey === todayKey();
   const isPast = dKey < todayKey();
@@ -3978,47 +4071,197 @@ function renderDayPopup(dKey, dateLabel, dayData) {
   if (!dayData || !dayData.items.length) {
     html += `<div style="text-align:center;padding:16px 0;color:var(--ink3);font-size:13px">No tasks scheduled for this day ✨</div>`;
   } else {
+    // Group by CATEGORY (real header) then by GOAL underneath
+    const byCat = {};
     dayData.items.forEach(item => {
-      const cat = state.categories.find(c => c.id === item.goal.category);
-      const title = item.actionText || item.goal.title;
-      const subtitle = item.actionText ? item.goal.title : (cat ? cat.name : '');
-      html += `<div class="cal-task-row">
-        <div class="cal-task-cat" style="background:${cat?`var(--c-${cat.color})`:'var(--ink3)'}"></div>
-        <div style="flex:1;min-width:0">
-          <div class="cal-task-text">${escapeHtml(title)}</div>
-          <div class="cal-task-meta">${escapeHtml(subtitle)}${item.goal.scheduledId||item.isScheduled?' · 🔄 Scheduled':''}${item.isProjected?' · Upcoming instance':''}</div>
-        </div>
-        ${item.goal.done ? '<span style="font-size:11px;color:var(--done)">✓ Done</span>' : ''}
+      const catId = item.goal.category || '_none';
+      if (!byCat[catId]) byCat[catId] = { cat: state.categories.find(c=>c.id===catId), goalMap: {} };
+      const gKey = item.goal.id + '_' + item.goal.uid;
+      if (!byCat[catId].goalMap[gKey]) byCat[catId].goalMap[gKey] = { goal: item.goal, actions: [], isGoalItself: false };
+      if (item.actionText) byCat[catId].goalMap[gKey].actions.push(item);
+      else byCat[catId].goalMap[gKey].isGoalItself = true;
+    });
+
+    Object.values(byCat).forEach(({ cat, goalMap }) => {
+      html += `<div style="display:flex;align-items:center;gap:6px;margin:10px 0 5px;padding-left:2px">
+        <div style="width:7px;height:7px;border-radius:50%;background:${cat?`var(--c-${cat.color})`:'var(--ink3)'}"></div>
+        <div style="font-size:11px;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:.4px">${cat?escapeHtml(cat.name):'Uncategorised'}</div>
       </div>`;
+
+      Object.values(goalMap).forEach(({ goal, actions, isGoalItself }) => {
+        if (isGoalItself && !actions.length) {
+          html += `<div class="cal-task-row">
+            <div class="cal-task-cat" style="background:${cat?`var(--c-${cat.color})`:'var(--ink3)'}"></div>
+            <div style="flex:1;min-width:0">
+              <div class="cal-task-text">${escapeHtml(goal.title)}</div>
+              ${goal.scheduledId?'<div class="cal-task-meta">🔄 Scheduled</div>':''}
+            </div>
+            ${goal.done ? '<span style="font-size:11px;color:var(--done)">✓</span>' : ''}
+          </div>`;
+        } else {
+          html += `<div style="margin-bottom:6px">
+            <div style="font-size:11.5px;font-weight:600;color:var(--ink2);margin-bottom:3px">${escapeHtml(goal.title)}</div>`;
+          actions.forEach(item => {
+            html += `<div class="cal-task-row" style="padding-left:10px">
+              <div class="cal-task-cat" style="background:${cat?`var(--c-${cat.color})`:'var(--ink3)'}"></div>
+              <div style="flex:1;min-width:0">
+                <div class="cal-task-text">${escapeHtml(item.actionText)}</div>
+                ${item.isScheduled?'<div class="cal-task-meta">🔄 Scheduled'+(item.isProjected?' · upcoming':'')+'</div>':''}
+              </div>
+            </div>`;
+          });
+          html += `</div>`;
+        }
+      });
     });
   }
   html += `</div>`;
   return html;
 }
 
-// Date range calendar — replaces "3 Months" and "6 Months"
-let rangeCalSelectedDay = null;
+function renderMonthCalendar() {
+  const today = todayKey();
+  const firstDay = new Date(calendarYear, calendarMonth, 1);
+  const lastDay = new Date(calendarYear, calendarMonth + 1, 0);
+  const monthStart = dateKey(firstDay);
+  const monthEnd = dateKey(lastDay);
+  const monthName = firstDay.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
 
-function setRangeMonth(startYear, startMonth, endYear, endMonth) {
-  rangeStartYear = startYear; rangeStartMonth = startMonth;
-  rangeEndYear = endYear; rangeEndMonth = endMonth;
-  rangeCalSelectedDay = null;
-  renderMain();
+  const dayTaskMap = getProjectedTaskMap(monthStart, monthEnd);
+
+  let html = `<div class="cal-header">
+    <button class="cal-nav-btn" onclick="navCalendar(-1)">‹</button>
+    <div class="cal-title">${monthName}</div>
+    <button class="cal-nav-btn" onclick="navCalendar(1)">›</button>
+  </div>
+  <div class="cal-grid">`;
+
+  ['S','M','T','W','T','F','S'].forEach(d => { html += `<div class="cal-dow">${d}</div>`; });
+  const startDow = firstDay.getDay();
+  for (let i = 0; i < startDow; i++) html += `<div class="cal-day empty"></div>`;
+
+  for (let d = 1; d <= lastDay.getDate(); d++) {
+    const dKey = dateKey(new Date(calendarYear, calendarMonth, d));
+    const dayData = dayTaskMap[dKey];
+    const isToday = dKey === today;
+    const isSelected = dKey === calendarSelectedDay;
+    const hasTasks = dayData && dayData.count > 0;
+    const hasScheduled = dayData && dayData.hasScheduled;
+    let cls = 'cal-day';
+    if (isToday) cls += ' today';
+    if (hasTasks) cls += hasScheduled ? ' has-scheduled' : ' has-tasks';
+    if (isSelected) cls += ' selected';
+    html += `<div class="${cls}" onclick="selectCalDay('${dKey}')">
+      <div class="cal-day-num">${d}</div>
+      ${hasTasks ? `<div class="cal-day-badge">${dayData.count}</div>` : ''}
+    </div>`;
+  }
+  const totalCells = startDow + lastDay.getDate();
+  const remaining = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+  for (let i = 0; i < remaining; i++) html += `<div class="cal-day empty"></div>`;
+  html += `</div>`;
+
+  html += `<div class="heatmap-legend" style="margin-top:8px;margin-bottom:4px">
+    <div class="cal-day-badge" style="background:var(--accent)">3</div><span>Regular &nbsp;</span>
+    <div class="cal-day-badge" style="background:var(--c-health)">2</div><span>Scheduled</span>
+  </div>`;
+
+  if (calendarSelectedDay) {
+    const selDate = new Date(calendarSelectedDay).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
+    html += renderDayPopup(calendarSelectedDay, selDate, dayTaskMap[calendarSelectedDay]);
+  }
+  return html;
 }
+
+// ── WEEK VIEW — Sunday to Saturday calendar week, day-by-day ──────
+function renderWeekByDay() {
+  const { start, end } = getCurrentWeekRange();
+  const taskMap = getProjectedTaskMap(start, end);
+  const today = todayKey();
+
+  const weekLabel = `${new Date(start).toLocaleDateString('en-GB',{day:'numeric',month:'short'})} – ${new Date(end).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}`;
+  let html = `<div style="text-align:center;margin-bottom:14px">
+    <div style="font-size:15px;font-weight:600;font-family:var(--serif)">${weekLabel}</div>
+    <div style="font-size:11px;color:var(--ink3)">Sunday – Saturday</div>
+  </div>`;
+
+  let cursor = new Date(start);
+  const endDate = new Date(end);
+  while (cursor <= endDate) {
+    const dKey = dateKey(cursor);
+    const dayName = cursor.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' });
+    const isToday = dKey === today;
+    const isPast = dKey < today;
+    const dayData = taskMap[dKey];
+    const hasTasks = dayData && dayData.count > 0;
+
+    html += `<div style="margin-bottom:${hasTasks?'8px':'14px'}">
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);margin-bottom:6px">
+        <div style="font-size:13px;font-weight:600;color:${isToday?'var(--accent)':isPast?'var(--ink3)':'var(--ink)'}">${dayName}${isToday?' · Today':''}</div>
+        ${hasTasks ? `<span style="font-size:11px;font-weight:700;background:${dayData.hasScheduled?'var(--c-health-l)':'var(--accent-l)'};color:${dayData.hasScheduled?'var(--c-health)':'var(--accent)'};padding:2px 8px;border-radius:10px">${dayData.count} task${dayData.count!==1?'s':''}</span>` : ''}
+      </div>`;
+
+    if (!hasTasks) {
+      html += `<div style="font-size:12.5px;color:var(--ink3);padding:4px 0 2px;font-style:italic">Nothing scheduled</div>`;
+    } else {
+      // Group by CATEGORY (as a real header) then by GOAL underneath it
+      const byCat = {};
+      dayData.items.forEach(item => {
+        const catId = item.goal.category || '_none';
+        if (!byCat[catId]) byCat[catId] = { cat: state.categories.find(c=>c.id===catId), goalMap: {} };
+        const gKey = item.goal.id + '_' + item.goal.uid;
+        if (!byCat[catId].goalMap[gKey]) byCat[catId].goalMap[gKey] = { goal: item.goal, actions: [], isGoalItself: false };
+        if (item.actionText) byCat[catId].goalMap[gKey].actions.push(item);
+        else byCat[catId].goalMap[gKey].isGoalItself = true;
+      });
+
+      Object.values(byCat).forEach(({ cat, goalMap }) => {
+        html += `<div style="display:flex;align-items:center;gap:6px;margin:8px 0 5px;padding-left:2px">
+          <div style="width:7px;height:7px;border-radius:50%;background:${cat?`var(--c-${cat.color})`:'var(--ink3)'}"></div>
+          <div style="font-size:11.5px;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:.4px">${cat?escapeHtml(cat.name):'Uncategorised'}</div>
+        </div>`;
+
+        Object.values(goalMap).forEach(({ goal, actions, isGoalItself }) => {
+          if (isGoalItself && !actions.length) {
+            html += `<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:6px;box-shadow:var(--shadow)">
+              <div style="flex:1;min-width:0">
+                <div style="font-size:13.5px;font-weight:500;color:${goal.done?'var(--ink3)':'var(--ink)'};${goal.done?'text-decoration:line-through':''}">${escapeHtml(goal.title)}</div>
+                ${goal.scheduledId?'<div style="font-size:10.5px;color:var(--c-health);margin-top:2px">🔄 Scheduled</div>':''}
+              </div>
+            </div>`;
+          } else {
+            html += `<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin-bottom:6px;box-shadow:var(--shadow)">
+              <div style="font-size:12px;font-weight:600;color:var(--ink2);margin-bottom:4px">${escapeHtml(goal.title)}</div>`;
+            actions.forEach(item => {
+              html += `<div style="display:flex;align-items:flex-start;gap:8px;padding:3px 0">
+                <div style="width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:5px;background:${cat?`var(--c-${cat.color})`:'var(--ink3)'}"></div>
+                <div style="font-size:12.5px;color:var(--ink)">${escapeHtml(item.actionText)}${item.isScheduled?' <span style="color:var(--c-health);font-size:10px">🔄</span>':''}${item.isProjected?' <i style="color:var(--ink3);font-size:10px">(upcoming)</i>':''}</div>
+              </div>`;
+            });
+            html += `</div>`;
+          }
+        });
+      });
+    }
+    html += `</div>`;
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return html;
+}
+
+// ── DATE RANGE CALENDAR — replaces 3/6 months, day popup sits under its own month ──
+function setRangeMonth() { rangeCalSelectedDay = null; renderMain(); }
 
 function renderRangeCalendar() {
   const today = todayKey();
   const rStart = dateKey(new Date(rangeStartYear, rangeStartMonth, 1));
   const rEnd = dateKey(new Date(rangeEndYear, rangeEndMonth + 1, 0));
-
-  // Range picker UI — pick start and end month
   const now = new Date();
   const months = [];
-  for (let i = -3; i <= 9; i++) {
+  for (let i = -6; i <= 12; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
     months.push({ year: d.getFullYear(), month: d.getMonth(), label: d.toLocaleDateString('en-GB',{month:'short',year:'2-digit'}) });
   }
-
   const taskMap = getProjectedTaskMap(rStart, rEnd);
   const totalTasks = Object.values(taskMap).reduce((s,d) => s+d.count, 0);
 
@@ -4026,26 +4269,24 @@ function renderRangeCalendar() {
   <div style="display:flex;gap:10px;margin-bottom:14px;align-items:flex-end">
     <div style="flex:1">
       <div style="font-size:11px;color:var(--ink3);margin-bottom:4px;text-transform:uppercase;letter-spacing:.3px">From</div>
-      <select class="field-select" onchange="(function(v){const p=v.split('-');rangeStartYear=+p[0];rangeStartMonth=+p[1];if(rangeStartYear>rangeEndYear||(rangeStartYear===rangeEndYear&&rangeStartMonth>rangeEndMonth)){rangeEndYear=rangeStartYear;rangeEndMonth=rangeStartMonth;}rangeCalSelectedDay=null;renderMain();})(this.value)">
+      <select class="field-select" onchange="(function(v){const p=v.split('-');rangeStartYear=+p[0];rangeStartMonth=+p[1];if(rangeStartYear>rangeEndYear||(rangeStartYear===rangeEndYear&&rangeStartMonth>rangeEndMonth)){rangeEndYear=rangeStartYear;rangeEndMonth=rangeStartMonth;}setRangeMonth();})(this.value)">
         ${months.map(m=>`<option value="${m.year}-${m.month}" ${m.year===rangeStartYear&&m.month===rangeStartMonth?'selected':''}>${m.label}</option>`).join('')}
       </select>
     </div>
     <div style="flex:1">
       <div style="font-size:11px;color:var(--ink3);margin-bottom:4px;text-transform:uppercase;letter-spacing:.3px">To</div>
-      <select class="field-select" onchange="(function(v){const p=v.split('-');rangeEndYear=+p[0];rangeEndMonth=+p[1];rangeCalSelectedDay=null;renderMain();})(this.value)">
+      <select class="field-select" onchange="(function(v){const p=v.split('-');rangeEndYear=+p[0];rangeEndMonth=+p[1];setRangeMonth();})(this.value)">
         ${months.map(m=>`<option value="${m.year}-${m.month}" ${m.year===rangeEndYear&&m.month===rangeEndMonth?'selected':''}>${m.label}</option>`).join('')}
       </select>
     </div>
   </div>
   <div style="font-size:12px;color:var(--ink3);margin-bottom:12px">${totalTasks} task${totalTasks!==1?'s':''} across this range</div>`;
 
-  // Render month grids for each month in range
   for (let y = rangeStartYear, m = rangeStartMonth; ; ) {
     const firstDay = new Date(y, m, 1);
     const lastDay = new Date(y, m + 1, 0);
     const mName = firstDay.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
-    const mStart = dateKey(firstDay);
-    const mEnd = dateKey(lastDay);
+    const isThisMonthSelected = rangeCalSelectedDay && new Date(rangeCalSelectedDay).getFullYear() === y && new Date(rangeCalSelectedDay).getMonth() === m;
 
     html += `<div style="margin-bottom:18px">
       <div style="font-size:13px;font-weight:600;color:var(--ink);margin-bottom:8px">${mName}</div>
@@ -4064,7 +4305,7 @@ function renderRangeCalendar() {
       if (isToday) cls += ' today';
       if (hasTasks) cls += hasScheduled ? ' has-scheduled' : ' has-tasks';
       if (isSelected) cls += ' selected';
-      html += `<div class="${cls}" onclick="rangeCalSelectedDay='${dKey}';renderMain()">
+      html += `<div class="${cls}" onclick="rangeCalSelectedDay=(rangeCalSelectedDay==='${dKey}'?null:'${dKey}');renderMain()">
         <div class="cal-day-num">${d}</div>
         ${hasTasks ? `<div class="cal-day-badge">${dayData.count}</div>` : ''}
       </div>`;
@@ -4072,190 +4313,137 @@ function renderRangeCalendar() {
     const tc = startDow + lastDay.getDate();
     const rem = tc % 7 === 0 ? 0 : 7 - (tc % 7);
     for (let i = 0; i < rem; i++) html += `<div class="cal-day empty"></div>`;
-    html += `</div></div>`; // end cal-grid + month
+    html += `</div>`;
+
+    // KEY FIX: day popup renders directly beneath its own month, not at page bottom
+    if (isThisMonthSelected) {
+      const selDate = new Date(rangeCalSelectedDay).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+      html += renderDayPopup(rangeCalSelectedDay, selDate, taskMap[rangeCalSelectedDay]);
+    }
+    html += `</div>`; // end month block
 
     if (y === rangeEndYear && m === rangeEndMonth) break;
     m++; if (m > 11) { m = 0; y++; }
-    if (y > rangeEndYear + 2) break; // safety
+    if (y > rangeEndYear + 3) break;
   }
 
-  // Day popup
-  if (rangeCalSelectedDay) {
-    const selDate = new Date(rangeCalSelectedDay).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-    html += renderDayPopup(rangeCalSelectedDay, selDate, taskMap[rangeCalSelectedDay]);
-  }
-
-  return html;
-}
-
-// ── WEEK BY DAY VIEW ─────────────────────────────────────────────
-function renderWeekByDay(rangeStart, rangeEnd) {
-  const taskMap = getProjectedTaskMap(rangeStart, rangeEnd);
-  const today = todayKey();
-  let html = '';
-
-  // Walk each day in the range
-  let cursor = new Date(rangeStart);
-  const endDate = new Date(rangeEnd);
-  while (cursor <= endDate) {
-    const dKey = dateKey(cursor);
-    const dayName = cursor.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' });
-    const isToday = dKey === today;
-    const isPast = dKey < today;
-    const dayData = taskMap[dKey];
-    const hasTasks = dayData && dayData.count > 0;
-
-    // Day header
-    html += `<div style="margin-bottom:${hasTasks?'8px':'14px'}">
-      <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);margin-bottom:6px">
-        <div style="font-size:13px;font-weight:600;color:${isToday?'var(--accent)':isPast?'var(--ink3)':'var(--ink)'}">${dayName}${isToday?' · Today':''}</div>
-        ${hasTasks ? `<span style="font-size:11px;font-weight:700;background:${dayData.hasScheduled?'var(--c-health-l)':'var(--accent-l)'};color:${dayData.hasScheduled?'var(--c-health)':'var(--accent)'};padding:2px 8px;border-radius:10px">${dayData.count} task${dayData.count!==1?'s':''}</span>` : ''}
-      </div>`;
-
-    if (!hasTasks) {
-      html += `<div style="font-size:12.5px;color:var(--ink3);padding:4px 0 2px;font-style:italic">Nothing scheduled</div>`;
-    } else {
-      dayData.items.forEach(item => {
-        const cat = state.categories.find(c => c.id === item.goal.category);
-        const title = item.actionText || item.goal.title;
-        html += `<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:6px;box-shadow:var(--shadow)">
-          <div style="width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px;background:${cat?`var(--c-${cat.color})`:'var(--ink3)'}"></div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:13.5px;font-weight:500;color:${item.goal.done?'var(--ink3)':'var(--ink)'};${item.goal.done?'text-decoration:line-through':''}">${escapeHtml(title)}</div>
-            ${item.actionText ? `<div style="font-size:11.5px;color:var(--ink3)">${escapeHtml(item.goal.title)}</div>` : ''}
-            <div style="font-size:11px;color:var(--ink3);margin-top:2px">
-              ${cat?escapeHtml(cat.name):''}${item.goal.scheduledId||item.isScheduled?' · 🔄 Scheduled':''}${item.isProjected?' · <i>upcoming instance</i>':''}
-            </div>
-          </div>
-          ${item.goal.done ? '<span style="font-size:12px;color:var(--done);flex-shrink:0">✓</span>' : ''}
-        </div>`;
-      });
-    }
-    html += `</div>`;
-    cursor.setDate(cursor.getDate() + 1);
-  }
   return html;
 }
 
 function renderTodayPage() {
-  const horizon = TASK_HORIZONS.find(h => h.id === taskHorizon) || TASK_HORIZONS[0];
-  const todayD = new Date(new Date().toDateString());
   const todayKeyStr = todayKey();
 
+  // Horizon selector row (always shown, sticky via CSS)
+  let html = `<div class="cat-pills-row" style="display:flex;margin:0 -14px 14px;padding:0 14px 10px;border-bottom:1px solid var(--border)">
+    ${TASK_HORIZONS.map(h => `<div class="cat-pill ${taskHorizon===h.id?'active':''}" onclick="setTaskHorizon('${h.id}')">${h.label}</div>`).join('')}
+  </div>`;
+
+  if (taskHorizon === 'month') { html += renderMonthCalendar(); return html; }
+  if (taskHorizon === 'week')  { html += renderWeekByDay(); return html; }
+  if (taskHorizon === 'range') { html += renderRangeCalendar(); return html; }
+
+  // Today / Tomorrow — flat range using projected task map (includes scheduled templates)
+  const horizon = TASK_HORIZONS.find(h => h.id === taskHorizon) || TASK_HORIZONS[0];
+  const todayD = new Date(new Date().toDateString());
   let rangeStart, rangeEnd;
   if (horizon.exact) {
     const d = new Date(todayD); d.setDate(d.getDate() + horizon.days);
     rangeStart = rangeEnd = dateKey(d);
   } else {
     rangeStart = todayKeyStr;
-    const endD = new Date(todayD); endD.setDate(endD.getDate() + horizon.days);
-    rangeEnd = dateKey(endD);
+    rangeEnd = todayKeyStr;
   }
 
-  // Horizon selector row (always shown)
-  let html = `<div class="cat-pills-row" style="display:flex;margin:0 -14px 14px;padding:0 14px 10px;border-bottom:1px solid var(--border)">
-    ${TASK_HORIZONS.map(h => `<div class="cat-pill ${taskHorizon===h.id?'active':''}" onclick="setTaskHorizon('${h.id}')">${h.label}</div>`).join('')}
-  </div>`;
-
-  // Calendar views
-  if (taskHorizon === 'month') { html += renderMonthCalendar(); return html; }
-  if (taskHorizon === 'range') { html += renderRangeCalendar(); return html; }
-
-  // "This Week" → day-by-day grouped view
-  if (taskHorizon === 'week') {
-    html += renderWeekByDay(rangeStart, rangeEnd);
-    return html;
-  }
-
-  // Build grouped structure using projected task map (includes scheduled templates)
   const taskMap = getProjectedTaskMap(rangeStart, rangeEnd);
-  const allItems = Object.values(taskMap).flatMap(d => d.items);
-
-  // Group by category for display
-  const grouped = {};
-  allItems.forEach(item => {
-    const catId = item.goal.category || '_none';
-    if (!grouped[catId]) {
-      grouped[catId] = { cat: state.categories.find(c => c.id === catId), goals: [] };
-    }
-    // Merge items by goal — if same goal appears multiple times (spanning goal), deduplicate
-    const existing = grouped[catId].goals.find(g => g.goal.id === item.goal.id && !item.actionText);
-    if (!existing || item.actionText) {
-      grouped[catId].goals.push(item);
-    }
-  });
-
-  // For Today specifically, also include isForToday goals not caught by deadline match
+  // Also fold in isForToday goals (isToday flag) for the 'today' horizon specifically —
+  // dedup by uid (not id, since projected/unspawned scheduled items share id:0)
   if (taskHorizon === 'today') {
     state.goals.forEach(g => {
       if (g.done || !isForToday(g)) return;
-      const catId = g.category || '_none';
-      const alreadyIncluded = allItems.some(item => item.goal.id === g.id);
-      if (!alreadyIncluded) {
-        if (!grouped[catId]) grouped[catId] = { cat: state.categories.find(c => c.id === catId), goals: [] };
-        grouped[catId].goals.push({ goal: g, actionText: null, isScheduled: false });
+      const already = (taskMap[todayKeyStr]?.items || []).some(it => it.goal.uid === g.uid && !it.actionText);
+      if (!already) {
+        if (!taskMap[todayKeyStr]) taskMap[todayKeyStr] = { count:0, hasScheduled:false, items:[] };
+        taskMap[todayKeyStr].count++;
+        taskMap[todayKeyStr].items.push({ goal:g, actionText:null, isScheduled:!!g.scheduledId });
       }
     });
   }
 
-  const totalCount = Object.values(grouped).reduce((s, g) => s + g.goals.length, 0);
-  const allEmpty = totalCount === 0;
+  const dayData = taskMap[rangeStart];
+  const totalCount = dayData ? dayData.count : 0;
   const doneCount = state.dailyLog[todayKeyStr] || 0;
 
   const summaryLabel = horizon.exact
     ? new Date(rangeStart).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short'})
-    : `${new Date(rangeStart).toLocaleDateString('en-GB',{day:'numeric',month:'short'})} – ${new Date(rangeEnd).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}`;
+    : new Date(rangeStart).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short'});
 
   html += `<div class="dash-summary-row" style="grid-template-columns:1fr 1fr;margin-bottom:14px">
     <div class="dash-stat-card"><div class="dash-stat-val">${totalCount}</div><div class="dash-stat-label">${horizon.label} — items</div></div>
-    <div class="dash-stat-card"><div class="dash-stat-val" style="font-size:15px">${summaryLabel}</div><div class="dash-stat-label">${taskHorizon==='today'?`${doneCount} done today`:'Date range'}</div></div>
+    <div class="dash-stat-card"><div class="dash-stat-val" style="font-size:15px">${summaryLabel}</div><div class="dash-stat-label">${taskHorizon==='today'?`${doneCount} done today`:'Upcoming'}</div></div>
   </div>`;
 
-  if (allEmpty) {
+  if (!dayData || !dayData.items.length) {
     const msg = taskHorizon === 'today'
       ? 'Nothing scheduled for today. Tap <b>+</b> and check "Add to today\'s tasks", or set a deadline of today on any goal or action.'
-      : `Nothing with a deadline in this window yet — including scheduled goals.`;
+      : `Nothing scheduled for ${horizon.label.toLowerCase()} yet — including scheduled goals.`;
     html += `<div class="empty-state"><div class="icon">☀️</div><p>${msg}</p></div>`;
-  } else {
-    Object.values(grouped).forEach(({ cat, goals }) => {
-      if (!goals.length) return;
-      html += `<div class="category-section">`;
-      if (cat) html += `<div class="category-head"><div class="cat-dot" style="background:var(--c-${cat.color})"></div><div class="cat-name" style="font-size:14px">${escapeHtml(cat.name)}</div></div>`;
+    return html;
+  }
 
-      goals.forEach(item => {
-        const { goal, actionText, isScheduled, isProjected } = item;
-        const occ = item.occDate;
-        const actionId = item.actionId;
-        const title = actionText || goal.title;
-        const isDone = goal.done || false;
+  // Group items by CATEGORY then by GOAL — so actions sit under their parent goal
+  const grouped = {};
+  dayData.items.forEach(item => {
+    const catId = item.goal.category || '_none';
+    if (!grouped[catId]) grouped[catId] = { cat: state.categories.find(c=>c.id===catId), goalMap: {} };
+    const gKey = item.goal.id + '_' + item.goal.uid;
+    if (!grouped[catId].goalMap[gKey]) grouped[catId].goalMap[gKey] = { goal: item.goal, actions: [], isGoalItself: false };
+    if (item.actionText) grouped[catId].goalMap[gKey].actions.push(item);
+    else grouped[catId].goalMap[gKey].isGoalItself = true;
+  });
 
-        html += `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;box-shadow:var(--shadow)">
-          <div style="display:flex;align-items:flex-start;gap:10px">`;
+  Object.values(grouped).forEach(({ cat, goalMap }) => {
+    html += `<div class="category-section">`;
+    if (cat) html += `<div class="category-head"><div class="cat-dot" style="background:var(--c-${cat.color})"></div><div class="cat-name" style="font-size:14px">${escapeHtml(cat.name)}</div></div>`;
 
-        if (!isProjected && goal.id) {
-          if (actionText && occ) {
-            html += `<div class="goal-check" style="width:22px;height:22px;flex-shrink:0" onclick="toggleOccurrence(${goal.id},${actionId},'${occ}')"></div>`;
-          } else if (actionText && actionId) {
-            html += `<div class="goal-check" style="width:22px;height:22px;flex-shrink:0" onclick="toggleAction(${goal.id},${actionId})"></div>`;
-          } else {
-            html += `<div class="goal-check ${isDone?'checked':''}" style="width:22px;height:22px;flex-shrink:0" onclick="toggleGoal(${goal.id})"></div>`;
-          }
+    const isInteractive = taskHorizon === 'today';
+
+    Object.values(goalMap).forEach(({ goal, actions, isGoalItself }) => {
+      html += `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;box-shadow:var(--shadow)">`;
+      html += `<div style="font-size:13.5px;font-weight:500;color:${goal.done?'var(--ink3)':'var(--ink)'};${goal.done?'text-decoration:line-through':''};margin-bottom:${actions.length?'8px':'0'}">${escapeHtml(goal.title)}`;
+      if (goal.time) html += `<span class="goal-deadline" style="margin-left:6px">⏰ ${goal.time}</span>`;
+      if (goal.scheduledId) html += `<span style="font-size:10px;color:var(--c-health);font-weight:600;margin-left:6px">🔄 Scheduled</span>`;
+      if (!isInteractive) html += `<span style="font-size:10px;color:var(--ink3);margin-left:6px">· view only</span>`;
+      html += `</div>`;
+
+      if (isGoalItself && !actions.length) {
+        if (goal.id) {
+          html += `<div class="quick-task-row" style="padding:0;border:none;background:none;margin:0">
+            <div class="goal-check ${goal.done?'checked':''}" style="width:22px;height:22px;${isInteractive?'':'opacity:0.4;cursor:default'}" ${isInteractive?`onclick="toggleGoal(${goal.id})"`:''}></div>
+            <div class="quick-task-text ${goal.done?'done':''}">Mark complete</div>
+          </div>`;
         } else {
-          // Projected — not spawned yet, show calendar icon
-          html += `<div style="width:22px;height:22px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px">🔄</div>`;
+          html += `<div style="font-size:11.5px;color:var(--ink3);font-style:italic">Upcoming scheduled instance — not created yet</div>`;
         }
+      }
 
-        html += `<div style="flex:1;min-width:0">
-            <div style="font-size:13.5px;font-weight:500;color:${isDone?'var(--ink3)':'var(--ink)'};${isDone?'text-decoration:line-through':''}">${escapeHtml(title)}</div>
-            ${actionText ? `<div style="font-size:12px;color:var(--ink3)">${escapeHtml(goal.title)}</div>` : ''}
-            ${isScheduled||isProjected ? `<span style="font-size:10.5px;color:var(--c-health);font-weight:600">🔄 Scheduled${isProjected?' · upcoming':''}</span>` : ''}
-            ${goal.time ? `<span class="goal-deadline" style="margin-left:4px">⏰ ${goal.time}</span>` : ''}
-          </div>
-        </div></div>`;
+      actions.forEach(item => {
+        if (item.occDate) {
+          html += `<div class="quick-task-row" style="padding:4px 0;border:none;background:none;margin:0">
+            <div class="goal-check" style="width:22px;height:22px;${isInteractive?'':'opacity:0.4;cursor:default'}" ${isInteractive?`onclick="toggleOccurrence(${goal.id},${item.actionId},'${item.occDate}')"`:''}></div>
+            <div class="quick-task-text">${escapeHtml(item.actionText)}</div>
+          </div>`;
+        } else if (item.actionId) {
+          html += `<div class="quick-task-row" style="padding:4px 0;border:none;background:none;margin:0">
+            <div class="goal-check" style="width:22px;height:22px;${isInteractive?'':'opacity:0.4;cursor:default'}" ${isInteractive?`onclick="toggleAction(${goal.id},${item.actionId})"`:''}></div>
+            <div class="quick-task-text">${escapeHtml(item.actionText)}</div>
+          </div>`;
+        }
       });
       html += `</div>`;
     });
-  }
+    html += `</div>`;
+  });
+
   return html;
 }
 
@@ -4397,6 +4585,9 @@ function openScheduledModal(id = null) {
     document.getElementById('sc-first').value = sc.firstDue;
     document.getElementById('sc-points').value = sc.points;
     document.getElementById('sc-notes').value = sc.notes || '';
+    document.getElementById('sc-milestone-count').value = sc.milestoneCount || '';
+    document.getElementById('sc-milestone-pts').value = sc.milestonePoints || 25;
+    document.getElementById('sc-milestone-pts-row').style.display = sc.milestoneCount ? 'block' : 'none';
     scActionsBuilder = (sc.actions || []).map(a => ({ text: a.text, points: a.points }));
     populateScSubgroupSelect(sc.category, sc.subgroup);
   } else {
@@ -4408,12 +4599,20 @@ function openScheduledModal(id = null) {
     document.getElementById('sc-first').value = todayKey();
     document.getElementById('sc-points').value = 5;
     document.getElementById('sc-notes').value = '';
+    document.getElementById('sc-milestone-count').value = '';
+    document.getElementById('sc-milestone-pts').value = 25;
+    document.getElementById('sc-milestone-pts-row').style.display = 'none';
     scActionsBuilder = [];
     if (state.categories[0]) populateScSubgroupSelect(state.categories[0].id);
   }
   renderScActionsList();
   document.getElementById('scheduledModalOverlay').classList.add('show');
   setTimeout(() => document.getElementById('sc-title').focus(), 100);
+
+  // Toggle milestone points row visibility as the count is typed
+  document.getElementById('sc-milestone-count').oninput = function() {
+    document.getElementById('sc-milestone-pts-row').style.display = this.value && parseInt(this.value) > 0 ? 'block' : 'none';
+  };
 }
 
 function renderScActionsList() {
@@ -4457,6 +4656,8 @@ function saveScheduledGoal() {
   const firstDue = document.getElementById('sc-first').value;
   if (!firstDue) { showToast('Please set a first due date'); return; }
 
+  const milestoneCount = parseInt(document.getElementById('sc-milestone-count').value) || 0;
+
   const data = {
     title,
     category: document.getElementById('sc-category').value,
@@ -4468,15 +4669,21 @@ function saveScheduledGoal() {
     notes: document.getElementById('sc-notes').value.trim(),
     actions: scActionsBuilder.map(a => ({ text: a.text, points: a.points })),
     active: true,
+    milestoneCount: milestoneCount > 0 ? milestoneCount : undefined,
+    milestonePoints: milestoneCount > 0 ? (parseInt(document.getElementById('sc-milestone-pts').value) || 25) : undefined,
   };
   if (!data.subgroup) delete data.subgroup;
+  if (!data.milestoneCount) { delete data.milestoneCount; delete data.milestonePoints; }
 
   if (editingScheduledId) {
     const sc = state.scheduledGoals.find(x => x.id === editingScheduledId);
+    // Preserve the cycle counter across edits unless milestoneCount actually changed
+    const preserveCycles = sc.milestoneCount === data.milestoneCount ? sc.milestoneCyclesCelebrated : 0;
     Object.assign(sc, data);
+    sc.milestoneCyclesCelebrated = preserveCycles || 0;
   } else {
     if (!state.scheduledGoals) state.scheduledGoals = [];
-    state.scheduledGoals.push({ id: state.nextScheduledId++, ...data });
+    state.scheduledGoals.push({ id: state.nextScheduledId++, milestoneCyclesCelebrated: 0, ...data });
   }
   saveState();
   spawnScheduledInstances(); // immediately spawn if first due ≤ today
@@ -4581,6 +4788,17 @@ function renderScheduledPage() {
             ${sc.active
               ? `<div class="scheduled-next ${nextCls}">📍 ${nextLabel}</div>`
               : '<div class="scheduled-meta" style="font-style:italic">Paused</div>'}
+            ${sc.milestoneCount ? (() => {
+              const cycleProgress = completedInstances.length % sc.milestoneCount;
+              const pct = Math.round((cycleProgress / sc.milestoneCount) * 100);
+              const tierIcon = sc.milestonePoints >= 50 ? '🥇' : sc.milestonePoints >= 25 ? '🥈' : '🥉';
+              return `<div style="margin-top:6px">
+                <div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--ink3);margin-bottom:2px">
+                  <span>${tierIcon} Milestone: ${cycleProgress}/${sc.milestoneCount}</span><span>+${sc.milestonePoints}pts</span>
+                </div>
+                <div class="cat-progress-bg" style="height:4px"><div class="cat-progress-fill" style="width:${pct}%;background:var(--c-health)"></div></div>
+              </div>`;
+            })() : ''}
           </div>
           <div class="goal-actions">
             <button onclick="openScheduledModal(${sc.id})" title="Edit">✎</button>
@@ -4723,10 +4941,34 @@ function rescheduleGoal(goalId) {
   openGoalModal(goalId); // open edit modal so they can pick a new date
 }
 
+// ── DISMISSAL PENALTY SYSTEM ──────────────────────────────────────
+// Applies only to RECURRING actions, SCHEDULED goals, and recurring
+// occurrences that are dismissed/discarded after missing their deadline.
+// Every 15th dismissal (of that specific recurring item) deducts 15pts —
+// a real cost for letting things quietly slip and dismissing them away.
+function recordDismissal(key, isRecurringOrScheduled) {
+  if (!isRecurringOrScheduled) return { count: 0, penalized: false };
+  if (!state.dismissalLog) state.dismissalLog = {};
+  state.dismissalLog[key] = (state.dismissalLog[key] || 0) + 1;
+  const count = state.dismissalLog[key];
+  if (count % 15 === 0) {
+    state.goalHistory.push({
+      id: state.nextGoalId++, uid: newUID(),
+      title: `⚠️ Dismissal penalty — ${count} missed & dismissed`,
+      category: state.categories[0]?.id || '',
+      deadline: todayKey(), completedDate: todayKey(),
+      points: -15, done: true, actions: [], isPenalty: true,
+    });
+    return { count, penalized: true };
+  }
+  return { count, penalized: false };
+}
+
 function discardOverdueGoal(goalId) {
+  const g = state.goals.find(x => x.id === goalId);
+  const isRecurringOrScheduled = !!g.scheduledId;
   appConfirm('This will remove the goal. It\'s logged as discarded in History so there\'s still a trace of it.', 'Discard goal?', 'Discard').then(ok => {
     if (!ok) return;
-    const g = state.goals.find(x => x.id === goalId);
     state.goalHistory.push({
       ...g,
       completedDate: todayKey(),
@@ -4735,9 +4977,15 @@ function discardOverdueGoal(goalId) {
       title: `[Discarded] ${g.title}`,
     });
     state.goals = state.goals.filter(x => x.id !== goalId);
+
+    const result = recordDismissal(`goal_${g.scheduledId || g.uid}`, isRecurringOrScheduled);
     saveState();
     renderMain();
-    showToast('Discarded — logged in History');
+    if (result.penalized) {
+      showToast(`Discarded — ⚠️ -15pts (${result.count}th missed dismissal of this scheduled goal)`);
+    } else {
+      showToast(isRecurringOrScheduled ? `Discarded (${result.count}/15 before penalty)` : 'Discarded — logged in History');
+    }
   });
 }
 
@@ -4750,26 +4998,45 @@ function rescheduleAction(goalId, actionId) {
 }
 
 function discardOverdueAction(goalId, actionId) {
+  const g = state.goals.find(x => x.id === goalId);
+  const a = g.actions.find(x => x.id === actionId);
+  const isRecurringOrScheduled = !!a.recurring || !!g.scheduledId;
   appConfirm('Remove this action? It\'s past its deadline and won\'t be recovered.', 'Discard action?', 'Discard').then(ok => {
     if (!ok) return;
-    const g = state.goals.find(x => x.id === goalId);
     g.actions = g.actions.filter(x => x.id !== actionId);
+
+    const result = recordDismissal(`action_${a.uid || actionId}`, isRecurringOrScheduled);
     saveState();
     renderMain();
-    showToast('Action discarded');
+    if (result.penalized) {
+      showToast(`Action discarded — ⚠️ -15pts (${result.count}th missed dismissal)`);
+    } else {
+      showToast(isRecurringOrScheduled ? `Action discarded (${result.count}/15 before penalty)` : 'Action discarded');
+    }
   });
 }
 
 function discardMissedOccurrences(goalId, actionId) {
   appConfirm('Mark all past missed occurrences as cleared? They won\'t count toward your progress.', 'Clear missed?', 'Clear').then(ok => {
-    if (!ok) return;
     const g = state.goals.find(x => x.id === goalId);
     const a = g.actions.find(x => x.id === actionId);
     const today = todayKey();
+    const missedCount = a.occurrences.filter(o => o.date < today && !o.done).length;
     a.occurrences.forEach(o => { if (o.date < today && !o.done) o.discarded = true; });
+
+    // Each dismissed occurrence counts individually toward the penalty threshold —
+    // recurring actions are always penalty-eligible
+    let lastResult = { count: 0, penalized: false };
+    for (let i = 0; i < missedCount; i++) {
+      lastResult = recordDismissal(`occ_${a.uid || actionId}`, true);
+    }
     saveState();
     renderMain();
-    showToast('Missed occurrences cleared');
+    if (lastResult.penalized) {
+      showToast(`Cleared ${missedCount} missed — ⚠️ -15pts (hit ${lastResult.count} total dismissals)`);
+    } else {
+      showToast(`Cleared ${missedCount} missed occurrence${missedCount!==1?'s':''} (${lastResult.count}/15 before penalty)`);
+    }
   });
 }
 
@@ -4891,13 +5158,9 @@ async function deleteAffirmation(idx) {
 // ═══════════════════════════════════════════════════════════════════
 function maybeShowAffirmation() {
   if (!state.affirmations.length) return;
-  const today = todayKey();
-  if (state.affirmationLastShown === today) return; // already shown today
   const idx = Math.floor(Math.random() * state.affirmations.length);
   document.getElementById('affirmationText').textContent = `"${state.affirmations[idx]}"`;
   document.getElementById('affirmationOverlay').classList.add('show');
-  state.affirmationLastShown = today;
-  saveState();
 }
 
 function closeAffirmation() {
@@ -6621,6 +6884,12 @@ function mergeIncomingData(incoming) {
     if (!state.streakRecordLog) state.streakRecordLog = [];
     incoming.streakRecordLog.forEach(d => {
       if (!state.streakRecordLog.includes(d)) state.streakRecordLog.push(d);
+    });
+  }
+  if (incoming.dismissalLog) {
+    if (!state.dismissalLog) state.dismissalLog = {};
+    Object.entries(incoming.dismissalLog).forEach(([key, count]) => {
+      state.dismissalLog[key] = Math.max(state.dismissalLog[key] || 0, count);
     });
   }
 }
