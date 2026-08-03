@@ -1,7 +1,7 @@
 // Service worker — network-first for the HTML app file so updates always reach
 // the user automatically. Cache-first only for static assets like fonts.
 // Update CACHE_VERSION whenever you deploy new code — this busts the old cache.
-const CACHE_VERSION = '2026.07.25';
+const CACHE_VERSION = '2026.08.03';
 const CACHE_NAME = `life-goals-${CACHE_VERSION}`;
 
 self.addEventListener('install', (event) => {
