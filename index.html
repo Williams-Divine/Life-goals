@@ -1062,6 +1062,10 @@ body { min-height: 100vh; padding-bottom: 70px; } /* space for bottom nav */
       <input type="checkbox" id="f-scheduled" style="width:18px;height:18px;cursor:pointer" onchange="toggleGoalScheduleFields()">
       <label for="f-scheduled" style="font-size:13px;color:var(--ink2);cursor:pointer">🔄 Make this a recurring scheduled goal</label>
     </div>
+    <div style="display:flex;align-items:center;gap:8px;padding:4px 0 8px">
+      <input type="checkbox" id="f-milestone" style="width:18px;height:18px;cursor:pointer">
+      <label for="f-milestone" style="font-size:13px;color:var(--ink2);cursor:pointer">🏅 This is a milestone — celebrate it when done</label>
+    </div>
     <div id="f-schedule-fields" style="display:none;background:var(--surface2);border-radius:10px;padding:12px;margin-bottom:8px">
       <div class="field-label" style="margin-bottom:6px">Repeat every</div>
       <div class="field-row" style="margin-bottom:8px">
@@ -1403,8 +1407,8 @@ body { min-height: 100vh; padding-bottom: 70px; } /* space for bottom nav */
 // with a new one from Claude. Shown in Settings so you always know
 // which version you're running and when it last changed.
 // ═══════════════════════════════════════════════════════════════════
-const APP_VERSION = '2026.08.03';
-const APP_VERSION_LABEL = 'Journey reorder/link, scheduled milestones, dismissal penalty, grouped history';
+const APP_VERSION = '2026.08.11';
+const APP_VERSION_LABEL = 'Fix: scheduled milestone no longer clutters Recent Completions';
 
 const COLOR_KEYS = ['spiritual','self','health','family','career','social','money'];
 
@@ -2161,16 +2165,27 @@ function moveGoalToHistory(g) {
   state.goalHistory.push(snapshot);
   state.goals = state.goals.filter(x => x.id !== g.id);
   logLocationChange(g.uid, g.title, 'Active Goals', 'History');
+
+  // If this goal was flagged as a milestone, pin it automatically and
+  // celebrate it distinctly — no bonus points, just recognition.
+  if (snapshot.isMilestone) {
+    pinAsMilestone(snapshot.uid || String(snapshot.id), snapshot.title, snapshot.completedDate, snapshot.category);
+  }
   showCompletionPopup(snapshot);
 }
 
 function showCompletionPopup(g) {
   const pts = goalPoints(g);
-  document.getElementById('completionEmoji').textContent = ['🎉','🏆','✨','🌟','🔥'][Math.floor(Math.random()*5)];
-  document.getElementById('completionTitle').textContent = 'Goal Complete!';
+  const isMilestone = !!g.isMilestone;
+
+  document.getElementById('completionEmoji').textContent = isMilestone ? '🏅' : ['🎉','🏆','✨','🌟','🔥'][Math.floor(Math.random()*5)];
+  document.getElementById('completionTitle').textContent = isMilestone ? 'Milestone Achieved!' : 'Goal Complete!';
   document.getElementById('completionSub').textContent = g.title;
 
   let listHTML = '';
+  if (isMilestone) {
+    listHTML += `<div class="completion-list-item" style="color:var(--accent);font-weight:600">🏅 This one mattered — pinned to your Milestones page</div>`;
+  }
   if (g.actions && g.actions.length) {
     g.actions.forEach(a => {
       if (a.recurring) {
@@ -2179,7 +2194,7 @@ function showCompletionPopup(g) {
         listHTML += `<div class="completion-list-item">✅ ${escapeHtml(a.text)} <span style="color:var(--ink3);margin-left:auto">+${a.points||0}pts</span></div>`;
       }
     });
-  } else {
+  } else if (!isMilestone) {
     listHTML = `<div class="completion-list-item">✅ ${escapeHtml(g.title)}</div>`;
   }
   document.getElementById('completionList').innerHTML = listHTML;
@@ -2350,6 +2365,7 @@ function openGoalModal(id = null, defaultCat = null) {
     document.getElementById('f-time').value = g.time || '';
     document.getElementById('f-points').value = g.points || 0;
     document.getElementById('f-today').checked = g.isToday || false;
+    document.getElementById('f-milestone').checked = g.isMilestone || false;
     // Schedule fields — allow converting an existing goal to a schedule
     document.getElementById('f-scheduled').checked = false;
     document.getElementById('f-schedule-fields').style.display = 'none';
@@ -2367,6 +2383,7 @@ function openGoalModal(id = null, defaultCat = null) {
     document.getElementById('f-time').value = '';
     document.getElementById('f-points').value = 10;
     document.getElementById('f-today').checked = false;
+    document.getElementById('f-milestone').checked = false;
     document.getElementById('f-scheduled').checked = false;
     document.getElementById('f-schedule-fields').style.display = 'none';
     document.getElementById('f-sc-first').value = todayKey();
@@ -2447,6 +2464,7 @@ function saveGoal() {
     time: document.getElementById('f-time').value,
     points: parseInt(document.getElementById('f-points').value) || 0,
     isToday: document.getElementById('f-today').checked,
+    isMilestone: document.getElementById('f-milestone').checked,
     subgroup: subgroupVal || undefined,
   };
   if (!data.subgroup) delete data.subgroup;
@@ -3423,7 +3441,7 @@ function renderMilestonesPage(filterCatId = null) {
   const cat = lockedCat ? state.categories.find(c => c.id === lockedCat) : null;
   const pinnedUids = new Set(state.milestones.map(m => m.sourceUid));
   const recentCompleted = [...state.goalHistory]
-    .filter(g => !g.isWeeklyReviewReward && !g.isDestinyBonus && !g.isStreakBonus && !g.discarded && !g.isMilestoneReward)
+    .filter(g => !g.isWeeklyReviewReward && !g.isDestinyBonus && !g.isStreakBonus && !g.discarded && !g.isMilestoneReward && !g.scheduledId)
     .sort((a,b) => (b.completedDate||'').localeCompare(a.completedDate||''))
     .slice(0, 30);
 
@@ -3477,18 +3495,18 @@ function renderMilestonesPage(filterCatId = null) {
     }
   }
 
-  // Milestone-flagged goals
-  const milestoneFlaggedGoals = [...state.goals, ...state.goalHistory].filter(g =>
-    g.isMilestone && (activeCat === 'all' || g.category === activeCat)
+  // Milestone-flagged goals still IN PROGRESS (completed ones are auto-pinned above instead)
+  const milestoneFlaggedGoals = state.goals.filter(g =>
+    g.isMilestone && !g.done && (activeCat === 'all' || g.category === activeCat)
   );
   if (milestoneFlaggedGoals.length) {
-    html += `<div class="heatmap-title" style="margin-bottom:4px;margin-top:14px">🎯 Goals I'm Watching</div><div class="heatmap-sub" style="margin-bottom:8px">Goals you flagged as important milestones in your life.</div>`;
+    html += `<div class="heatmap-title" style="margin-bottom:4px;margin-top:14px">🎯 Goals I'm Watching</div><div class="heatmap-sub" style="margin-bottom:8px">Goals you've flagged to celebrate as milestones once complete.</div>`;
     milestoneFlaggedGoals.forEach(g => {
       const catObj = state.categories.find(c => c.id === g.category);
-      const dl = g.completedDate ? `Completed ${new Date(g.completedDate).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}` : g.deadline ? `Due ${new Date(g.deadline).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}` : 'In progress';
-      html += `<div class="milestone-card ${g.done?'milestone-pinned':''}">
+      const dl = g.deadline ? `Due ${new Date(g.deadline).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}` : 'In progress';
+      html += `<div class="milestone-card">
         <div class="milestone-top">
-          <div class="milestone-icon">${g.done?'✅':'🎯'}</div>
+          <div class="milestone-icon">🎯</div>
           <div class="milestone-body">
             <div class="milestone-title">${escapeHtml(g.title)}</div>
             <div class="milestone-date">${dl}</div>
