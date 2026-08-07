@@ -1407,8 +1407,8 @@ body { min-height: 100vh; padding-bottom: 70px; } /* space for bottom nav */
 // with a new one from Claude. Shown in Settings so you always know
 // which version you're running and when it last changed.
 // ═══════════════════════════════════════════════════════════════════
-const APP_VERSION = '2026.08.11';
-const APP_VERSION_LABEL = 'Fix: scheduled milestone no longer clutters Recent Completions';
+const APP_VERSION = '2026.08.12';
+const APP_VERSION_LABEL = 'Fix: stats counter, milestone baseline, update detection, Tomorrow view text';
 
 const COLOR_KEYS = ['spiritual','self','health','family','career','social','money'];
 
@@ -1545,6 +1545,15 @@ function backfillUIDs(s) {
   if (!s.nextSubgroupId) s.nextSubgroupId = 1;
   if (!s.scheduledGoals) s.scheduledGoals = [];
   if (!s.nextScheduledId) s.nextScheduledId = 1;
+  // Any existing scheduled goal that already had a milestoneCount set before
+  // this baseline fix existed gets its baseline backfilled to its current
+  // completion count — so it doesn't suddenly fire for past completions.
+  s.scheduledGoals.forEach(sc => {
+    if (sc.milestoneCount && sc.milestoneBaseline === undefined) {
+      const completedSoFar = (s.goalHistory||[]).filter(g => g.scheduledId === sc.id).length;
+      sc.milestoneBaseline = completedSoFar;
+    }
+  });
   if (!s.milestones) s.milestones = [];
   if (!s.nextMilestoneId) s.nextMilestoneId = 1;
   if (!s.dismissalLog) s.dismissalLog = {};
@@ -1765,11 +1774,24 @@ function countOverdue() {
 }
 
 function renderStats() {
-  const total = state.goals.length;
-  const done = state.goals.filter(g => g.done).length;
+  const now = new Date();
+  const monthStart = dateKey(new Date(now.getFullYear(), now.getMonth(), 1));
+  const monthEnd = dateKey(new Date(now.getFullYear(), now.getMonth()+1, 0));
+
+  // Goals actually completed THIS MONTH (excludes bonus/reward pseudo-entries)
+  const doneThisMonth = state.goalHistory.filter(g =>
+    !g.isWeeklyReviewReward && !g.isDestinyBonus && !g.isStreakBonus && !g.isMilestoneReward &&
+    g.completedDate >= monthStart && g.completedDate <= monthEnd
+  ).length;
+
+  // Total goals relevant to this month: still-active goals (including scheduled
+  // instances currently live in state.goals) + what's already been completed this month
+  const activeGoalsCount = state.goals.length;
+  const totalThisMonth = activeGoalsCount + doneThisMonth;
+
   const overdue = countOverdue();
   const html = `
-    <div class="stat-chip"><b>${done}</b>/${total} goals done</div>
+    <div class="stat-chip"><b>${doneThisMonth}</b>/${totalThisMonth} goals done this month</div>
     <div class="stat-chip reward">⚡ <b>${balance()}</b> pts available</div>
     ${overdue > 0 ? `<div class="stat-chip" style="background:var(--danger-l);color:var(--danger);cursor:pointer" onclick="setTab('overdue')"><b>${overdue}</b> overdue ›</div>` : ''}
   `;
@@ -3370,13 +3392,18 @@ function saveLinkedGoals() {
 }
 
 // Checks each active scheduled goal's completion count against its own
-// milestoneCount setting (if any). Every time the count is hit, celebrates
-// and restarts the cycle — e.g. "every 10 completions of Exercise = milestone".
+// milestoneCount setting (if any). Only counts completions that happened
+// AFTER the milestone was set (via milestoneBaseline) — so setting a
+// milestone of 5 doesn't instantly fire just because you'd already done
+// it 8 times in the past. Every time the count is hit, celebrates and
+// restarts the cycle from that new point forward.
 function checkScheduledMilestones() {
   (state.scheduledGoals||[]).forEach(sc => {
     if (!sc.active || !sc.milestoneCount || sc.milestoneCount <= 0) return;
+    const baseline = sc.milestoneBaseline || 0;
     const totalCompletions = state.goalHistory.filter(g => g.scheduledId === sc.id).length;
-    const cyclesReached = Math.floor(totalCompletions / sc.milestoneCount);
+    const completionsSinceBaseline = Math.max(0, totalCompletions - baseline);
+    const cyclesReached = Math.floor(completionsSinceBaseline / sc.milestoneCount);
     const cyclesCelebrated = sc.milestoneCyclesCelebrated || 0;
     if (cyclesReached > cyclesCelebrated) {
       celebrateScheduledMilestone(sc, cyclesReached);
@@ -4430,7 +4457,6 @@ function renderTodayPage() {
       html += `<div style="font-size:13.5px;font-weight:500;color:${goal.done?'var(--ink3)':'var(--ink)'};${goal.done?'text-decoration:line-through':''};margin-bottom:${actions.length?'8px':'0'}">${escapeHtml(goal.title)}`;
       if (goal.time) html += `<span class="goal-deadline" style="margin-left:6px">⏰ ${goal.time}</span>`;
       if (goal.scheduledId) html += `<span style="font-size:10px;color:var(--c-health);font-weight:600;margin-left:6px">🔄 Scheduled</span>`;
-      if (!isInteractive) html += `<span style="font-size:10px;color:var(--ink3);margin-left:6px">· view only</span>`;
       html += `</div>`;
 
       if (isGoalItself && !actions.length) {
@@ -4439,8 +4465,6 @@ function renderTodayPage() {
             <div class="goal-check ${goal.done?'checked':''}" style="width:22px;height:22px;${isInteractive?'':'opacity:0.4;cursor:default'}" ${isInteractive?`onclick="toggleGoal(${goal.id})"`:''}></div>
             <div class="quick-task-text ${goal.done?'done':''}">Mark complete</div>
           </div>`;
-        } else {
-          html += `<div style="font-size:11.5px;color:var(--ink3);font-style:italic">Upcoming scheduled instance — not created yet</div>`;
         }
       }
 
@@ -4695,13 +4719,24 @@ function saveScheduledGoal() {
 
   if (editingScheduledId) {
     const sc = state.scheduledGoals.find(x => x.id === editingScheduledId);
-    // Preserve the cycle counter across edits unless milestoneCount actually changed
-    const preserveCycles = sc.milestoneCount === data.milestoneCount ? sc.milestoneCyclesCelebrated : 0;
+    const milestoneChanged = sc.milestoneCount !== data.milestoneCount;
     Object.assign(sc, data);
-    sc.milestoneCyclesCelebrated = preserveCycles || 0;
+    if (milestoneChanged) {
+      // Milestone target is new or changed — start counting from THIS point forward,
+      // ignoring any completions that already happened before this was set.
+      sc.milestoneCyclesCelebrated = 0;
+      sc.milestoneBaseline = data.milestoneCount
+        ? state.goalHistory.filter(g => g.scheduledId === sc.id).length
+        : 0;
+    }
   } else {
     if (!state.scheduledGoals) state.scheduledGoals = [];
-    state.scheduledGoals.push({ id: state.nextScheduledId++, milestoneCyclesCelebrated: 0, ...data });
+    state.scheduledGoals.push({
+      id: state.nextScheduledId++,
+      milestoneCyclesCelebrated: 0,
+      milestoneBaseline: 0, // brand new schedule, nothing completed yet — baseline is 0
+      ...data,
+    });
   }
   saveState();
   spawnScheduledInstances(); // immediately spawn if first due ≤ today
@@ -4807,7 +4842,9 @@ function renderScheduledPage() {
               ? `<div class="scheduled-next ${nextCls}">📍 ${nextLabel}</div>`
               : '<div class="scheduled-meta" style="font-style:italic">Paused</div>'}
             ${sc.milestoneCount ? (() => {
-              const cycleProgress = completedInstances.length % sc.milestoneCount;
+              const baseline = sc.milestoneBaseline || 0;
+              const sinceBaseline = Math.max(0, completedInstances.length - baseline);
+              const cycleProgress = sinceBaseline % sc.milestoneCount;
               const pct = Math.round((cycleProgress / sc.milestoneCount) * 100);
               const tierIcon = sc.milestonePoints >= 50 ? '🥇' : sc.milestonePoints >= 25 ? '🥈' : '🥉';
               return `<div style="margin-top:6px">
@@ -6962,9 +6999,13 @@ if (_justUpdatedCode) {
 setTimeout(() => maybeShowAffirmation(), 600);
 
 // ── UPDATE DETECTION ──
-// When the service worker finds a new version, it triggers a 'controllerchange'
-// event. We listen for it and show a non-intrusive banner so the user can
-// refresh at their convenience without losing any data.
+// Our service worker calls self.skipWaiting() immediately on install, so it
+// NEVER sits in the "waiting" state — it activates and takes over right away.
+// That means we can't detect updates via reg.waiting (it's always null).
+// Instead: reg.update() forces the browser to re-fetch sw.js from the network;
+// if the fetched sw.js differs from what's currently controlling the page,
+// the browser installs + activates it automatically (skipWaiting again), which
+// fires 'controllerchange' — that's our real signal an update landed.
 function doAppUpdate() {
   if ('caches' in window) {
     caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))).then(() => {
@@ -6975,23 +7016,29 @@ function doAppUpdate() {
   }
 }
 
+let _updateCheckInFlight = false;
 function checkForUpdate() {
+  if (!('serviceWorker' in navigator)) { doAppUpdate(); return; }
+  _updateCheckInFlight = true;
   showToast('Checking for updates...');
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.ready.then(reg => {
-      reg.update().then(() => {
-        if (reg.waiting) {
-          showUpdateBanner();
-          showToast('✨ Update ready — tap the banner to install');
-        } else {
-          showToast("✓ You're on the latest version");
-        }
-      });
-    }).catch(() => showToast("You're on the latest version"));
-  } else {
-    // No service worker — just do a hard reload
-    doAppUpdate();
-  }
+
+  navigator.serviceWorker.ready.then(reg => {
+    // Force the browser to check GitHub for a newer sw.js right now
+    return reg.update();
+  }).then(() => {
+    // Give the browser a moment to install/activate if a new SW was found —
+    // if 'controllerchange' fires (see listener below) it will handle the
+    // banner itself. If nothing happens within 2s, we're genuinely current.
+    setTimeout(() => {
+      if (_updateCheckInFlight) {
+        _updateCheckInFlight = false;
+        showToast("✓ You're on the latest version");
+      }
+    }, 2000);
+  }).catch(() => {
+    _updateCheckInFlight = false;
+    showToast("Couldn't check for updates — check your connection");
+  });
 }
 
 function showUpdateBanner() {
@@ -7001,27 +7048,27 @@ function showUpdateBanner() {
 
 // Register service worker and listen for updates
 if ('serviceWorker' in navigator && (location.protocol === 'http:' || location.protocol === 'https:')) {
-  navigator.serviceWorker.register('./sw.js').then(reg => {
-    // If a new SW is waiting (already downloaded), show banner immediately
-    if (reg.waiting) { showUpdateBanner(); return; }
+  let _swInitiallyControlled = !!navigator.serviceWorker.controller;
 
-    // When a new SW is found and installed
-    reg.addEventListener('updatefound', () => {
-      const newWorker = reg.installing;
-      newWorker.addEventListener('statechange', () => {
-        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-          // New version ready — show the banner
-          showUpdateBanner();
-        }
-      });
-    });
+  navigator.serviceWorker.register('./sw.js').then(reg => {
+    // Proactively ask the browser to check for a newer sw.js on every load —
+    // this is what makes updates arrive without the user having to do anything
+    reg.update();
   }).catch(() => {
     // Service worker unavailable — app still works fine
   });
 
-  // Also show banner if controller changes (e.g. SW skipped waiting on another tab)
+  // This is the REAL update signal for a skipWaiting-based service worker:
+  // when a new SW takes control mid-session, this fires. On first-ever
+  // install (no previous controller), we DON'T show the banner — that's
+  // just the app installing itself for the first time, not an update.
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    showUpdateBanner();
+    _updateCheckInFlight = false;
+    if (_swInitiallyControlled) {
+      showUpdateBanner();
+      showToast('✨ New version installed — tap the banner to reload');
+    }
+    _swInitiallyControlled = true;
   });
 }
 </script>
